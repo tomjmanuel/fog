@@ -17,7 +17,7 @@ class GOESConfig:
     bucket : str
         Cloud bucket containing GOES L1b files.
     region : str
-        GOES region identifier ("F", "M1", "M2").
+        GOES scan mode / region identifier (e.g. "M6" for mode 6, "F" for full-disk).
     channels : tuple[str, ...]
         ABI channel identifiers required for the fog algorithm.
     cache_dir : str | None
@@ -33,7 +33,7 @@ class GOESConfig:
 
     product: str = "ABI-L1b-RadC"
     bucket: str = "noaa-goes18"
-    region: str = "M1"
+    region: str = "M6"
     channels: Tuple[str, ...] = ("C02", "C07", "C14")
     cache_dir: str | None = None
     max_concurrent: int = 4
@@ -62,8 +62,11 @@ class GOESConfig:
     ) -> str:
         scene_time = scene_time.astimezone(timezone.utc)
         product = product or self.product
+        prefix = f"{product}/{scene_time:%Y/%j/%H}/OR_{product}-"
         region = region or self.region
-        return f"{product}/{scene_time:%Y/%j/%H}/OR_{product}-G18"
+        if region:
+            prefix += region
+        return prefix
 
 
 def default_config() -> GOESConfig:
