@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Iterable, List, Tuple
 
 
@@ -71,7 +72,8 @@ class GOESConfig:
 
 def default_config() -> GOESConfig:
     """Return a default configuration tailored for San Francisco fog."""
-    return GOESConfig()
+    cache_dir = Path.home() / ".cache" / "fog"
+    return GOESConfig(cache_dir=str(cache_dir))
 
 
 __all__ = ["GOESConfig", "default_config"]
