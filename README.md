@@ -12,7 +12,7 @@ a fog-probability algorithm inspired by NOAA's low stratus/fog product.
 - Geographic subsetting helpers tuned for the San Francisco coastline.
 - Projection utilities and high-resolution grid generation for enhanced visualization.
 - A direct translation of the provided fog probability pseudo-code with placeholders for lookup tables.
-- CLI entrypoint (`fog-cli fog <scene-time>`) to fetch data and compute fog probabilities for a given scene.
+- CLI script (`python -m fog.cli --scene-time <iso-timestamp>`) to fetch data and compute fog probabilities for a given scene.
 
 ## Installation
 
@@ -31,7 +31,7 @@ pip install -e .[dev]
 ## Usage
 
 ```bash
-fog-cli fog 2023-07-01T12:30:00
+python -m fog.cli --scene-time 2023-07-01T12:30:00
 ```
 
 Use the `--sector` option to specify a custom bounding box (`west,south,east,north`).
@@ -46,7 +46,7 @@ src/fog/
     fetch.py                # Data access helpers (S3 + subsetting)
     projection.py           # Projection, grid, and resampling utilities
     probability.py          # Fog probability algorithm + diagnostics
-    cli.py                  # Typer-based CLI entrypoint
+    cli.py                  # argparse-based CLI entrypoint
 ```
 
 ## Next Steps

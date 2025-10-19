@@ -19,7 +19,6 @@ dependencies = [
     "shapely>=2.0",
     "scipy>=1.10",
     "dask[array]>=2024.1",
-    "typer>=0.9",
     "rich>=13.0"
 ]
 
@@ -29,5 +28,3 @@ dev = [
     "python-dotenv>=1.0"
 ]
 
-[project.scripts]
-fog-cli = "fog.cli:app"
