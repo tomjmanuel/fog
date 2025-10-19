@@ -78,13 +78,16 @@ def list_scene_objects(
     for key in candidates:
         try:
             parts = key.split("_")
-            timestamp = parts[3][1:]
-            scene = datetime.strptime(timestamp, "%Y%j%H%M%S").replace(tzinfo=timezone.utc)
+            # Extract timestamp: s20231821901187 -> first 14 chars
+            timestamp = parts[3][1:14]
+            scene = datetime.strptime(timestamp, "%Y%j%H%M%S").replace(
+                tzinfo=timezone.utc
+            )
         except Exception:  # pragma: no cover - format errors are rare
             LOGGER.debug("Skipping unexpected key format: %s", key)
             continue
         if start <= scene <= end:
-            if channel is None or f"-{channel}_" in key:
+            if channel is None or f"{channel}_" in key:
                 filtered.append(key)
     return sorted(filtered)
 
@@ -114,7 +117,8 @@ def fetch_ABI_L1b(channel: str, scene_time: datetime, sector: SectorDefinition, 
     product = config.product
     dataset = open_dataset(config, scene_time, product=product, channel=channel)
     subset = subset_sector(dataset, sector)
-    return subset.sel(band=channel) if "band" in subset.dims else subset
+    # Channel is already filtered in open_dataset, no need to select by band
+    return subset
 
 
 def fetch_ABI_geolocation(scene_time: datetime, sector: SectorDefinition, config: GOESConfig) -> xr.Dataset:
