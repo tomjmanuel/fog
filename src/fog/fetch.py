@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from functools import lru_cache
+from pathlib import Path
 from typing import Mapping, Tuple
 
 import numpy as np
@@ -92,6 +94,53 @@ def list_scene_objects(
     return sorted(filtered)
 
 
+def _ensure_cache_dir(cache_dir: str | None) -> Path | None:
+    if not cache_dir:
+        return None
+    cache_path = Path(os.path.expanduser(cache_dir)).resolve()
+    cache_path.mkdir(parents=True, exist_ok=True)
+    return cache_path
+
+
+def _cache_path(cache_root: Path | None, key: str, bucket: str) -> Path | None:
+    if cache_root is None:
+        return None
+    normalized = key
+    if normalized.startswith("s3://"):
+        normalized = normalized[len("s3://") :]
+    if normalized.startswith(f"{bucket}/"):
+        normalized = normalized[len(bucket) + 1 :]
+    local_path = cache_root / normalized
+    local_path.parent.mkdir(parents=True, exist_ok=True)
+    return local_path
+
+
+def _ensure_local_copy(
+    fs,
+    key: str,
+    bucket: str,
+    cache_root: Path | None,
+) -> tuple[str, bool]:
+    if cache_root is None:
+        uri = key if key.startswith("s3://") else f"s3://{key}"
+        return uri, False
+
+    local_path = _cache_path(cache_root, key, bucket)
+    if local_path is None:
+        uri = key if key.startswith("s3://") else f"s3://{key}"
+        return uri, False
+
+    if not local_path.exists():
+        remote_path = key
+        if remote_path.startswith("s3://"):
+            remote_path = remote_path[len("s3://") :]
+        LOGGER.info("Caching %s -> %s", remote_path, local_path)
+        fs.get(remote_path, str(local_path))
+    else:
+        LOGGER.debug("Using cached copy for %s", local_path)
+    return str(local_path), True
+
+
 def open_dataset(
     config: GOESConfig,
     scene_time: datetime,
@@ -106,10 +155,18 @@ def open_dataset(
             f"No {product} objects found for {scene_time.isoformat()}"
         )
     fs = _fs(config)
-    uris = [f"s3://{key}" if not key.startswith("s3://") else key for key in keys]
-    LOGGER.info("Opening %s datasets: %d granules", product, len(uris))
+    cache_root = _ensure_cache_dir(config.cache_dir)
+    uris_with_locality: list[tuple[str, bool]] = [
+        _ensure_local_copy(fs, key, config.bucket, cache_root) for key in keys
+    ]
+    LOGGER.info("Opening %s datasets: %d granules", product, len(uris_with_locality))
     open_kwargs = {"engine": "h5netcdf", "chunks": chunks} if chunks else {"engine": "h5netcdf"}
-    datasets = [xr.open_dataset(fs.open(uri, mode="rb"), **open_kwargs) for uri in uris]
+    datasets: list[xr.Dataset] = []
+    for uri, is_local in uris_with_locality:
+        if is_local:
+            datasets.append(xr.open_dataset(uri, **open_kwargs))
+        else:
+            datasets.append(xr.open_dataset(fs.open(uri, mode="rb"), **open_kwargs))
     return xr.concat(datasets, dim="y") if len(datasets) > 1 else datasets[0]
 
 
