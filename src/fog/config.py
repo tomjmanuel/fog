@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Iterable, List, Tuple
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, frozen=True)
 class GOESConfig:
     """Runtime configuration for fetching and processing GOES scenes.
 
