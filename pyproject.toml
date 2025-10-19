@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fog"
+version = "0.1.0"
+description = "GOES-18 fog probability toolkit"
+authors = [{name = "OpenAI Assistant"}]
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "s3fs>=2023.9.0",
+    "xarray>=2023.7.0",
+    "numpy>=1.24",
+    "pandas>=2.0",
+    "pyproj>=3.6",
+    "rasterio>=1.3",
+    "shapely>=2.0",
+    "scipy>=1.10",
+    "dask[array]>=2024.1",
+    "typer>=0.9",
+    "rich>=13.0"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+    "python-dotenv>=1.0"
+]
+
+[project.scripts]
+fog-cli = "fog.cli:app"
