@@ -18,6 +18,7 @@ import numpy as np
 import xarray as xr
 
 from .projection import extent_from_dataset, lonlat_edges_grid
+from .config import OverlayConfig, load_overlay_config
 
 
 def _arg_parser() -> argparse.ArgumentParser:
@@ -42,6 +43,16 @@ def _arg_parser() -> argparse.ArgumentParser:
             "Upsample each dataset by this integer factor using bilinear "
             "interpolation before plotting"
         ),
+    )
+    parser.add_argument(
+        "--base-image",
+        type=Path,
+        help="Optional high-resolution base image for overlay",
+    )
+    parser.add_argument(
+        "--overlay-config",
+        type=Path,
+        help="JSON configuration describing the base image bounding box",
     )
     return parser
 
@@ -168,7 +179,21 @@ def _extent_from_lonlat(dataset: xr.Dataset) -> Sequence[float] | None:
     return _extent_from_projection(dataset)
 
 
-def visualize_directory(input_dir: Path, upsample_factor: int = 1) -> None:
+def _alpha_from_values(values: np.ndarray) -> np.ndarray:
+    """Generate alpha values for radiance data using a lookup table."""
+
+    table_values = np.array([0.0, 75.0, 200.0])
+    table_alpha = np.array([0.0, 0.0, 1.0])
+    clipped = np.clip(values, table_values[0], table_values[-1])
+    return np.interp(clipped, table_values, table_alpha)
+
+
+def visualize_directory(
+    input_dir: Path,
+    upsample_factor: int = 1,
+    base_image_path: Path | None = None,
+    overlay_config: OverlayConfig | None = None,
+) -> None:
     import matplotlib.pyplot as plt
 
     files = _find_channel_files(input_dir)
@@ -176,6 +201,14 @@ def visualize_directory(input_dir: Path, upsample_factor: int = 1) -> None:
         raise FileNotFoundError(
             f"No NetCDF channel files found in {input_dir}"
         )
+
+    base_image = None
+    base_extent: Sequence[float] | None = None
+    if base_image_path is not None:
+        if overlay_config is None:
+            raise ValueError("Overlay config is required when providing a base image")
+        base_image = plt.imread(base_image_path)
+        base_extent = overlay_config.bounding_box
 
     for path in files:
         # Always load fully to avoid lazy/dask surprises
@@ -202,7 +235,17 @@ def visualize_directory(input_dir: Path, upsample_factor: int = 1) -> None:
         bt = _compute_brightness_temperature(rad, {**ds.attrs, **rad.attrs})
         extent = _extent_from_lonlat(ds)
 
-        if bt is not None:
+        is_channel_two = ch.upper().startswith("C02")
+
+        if base_image is not None and is_channel_two:
+            fig, ax_r = plt.subplots(1, 1, figsize=(10, 6))
+            ax_r.imshow(
+                base_image,
+                extent=base_extent,
+                origin="upper",
+                aspect="auto",
+            )
+        elif bt is not None:
             fig, (ax_r, ax_t) = plt.subplots(1, 2, figsize=(14, 5))
         else:
             fig, ax_r = plt.subplots(1, 1, figsize=(7, 5))
@@ -215,6 +258,7 @@ def visualize_directory(input_dir: Path, upsample_factor: int = 1) -> None:
             lon_e, lat_e = lonlat_edges_grid(
                 ds, upsample_factor=upsample_factor
             )
+            alpha_values = _alpha_from_values(r) if base_image is not None and is_channel_two else None
             im_r = ax_r.pcolormesh(
                 lon_e,
                 lat_e,
@@ -223,19 +267,22 @@ def visualize_directory(input_dir: Path, upsample_factor: int = 1) -> None:
                 vmin=r_vmin,
                 vmax=r_vmax,
                 shading="auto",
+                alpha=alpha_values,
             )
             ax_r.set_xlabel("Longitude")
             ax_r.set_ylabel("Latitude")
         except Exception:
             # Fallback to extent-based imshow if projection metadata is missing
+            alpha_values = _alpha_from_values(r) if base_image is not None and is_channel_two else None
             im_r = ax_r.imshow(
                 r,
                 origin="upper",
                 cmap="viridis",
                 vmin=r_vmin,
                 vmax=r_vmax,
-                extent=extent,
+                extent=base_extent if base_image is not None and is_channel_two else extent,
                 aspect="auto",
+                alpha=alpha_values,
             )
             if extent is not None:
                 ax_r.set_xlabel("Longitude")
@@ -245,7 +292,7 @@ def visualize_directory(input_dir: Path, upsample_factor: int = 1) -> None:
         cbar_r.set_label(rad.attrs.get("units", ""))
 
         # Temperature plot (if available)
-        if bt is not None:
+        if bt is not None and not (base_image is not None and is_channel_two):
             t = bt.values
             t_vmin = np.nanpercentile(t, 2.0)
             t_vmax = np.nanpercentile(t, 98.0)
@@ -291,7 +338,13 @@ def visualize_directory(input_dir: Path, upsample_factor: int = 1) -> None:
 def main(argv: Iterable[str] | None = None) -> None:
     parser = _arg_parser()
     args = parser.parse_args(argv)
-    visualize_directory(args.input_dir, upsample_factor=args.upsample_factor)
+    overlay_conf = load_overlay_config(args.overlay_config) if args.overlay_config else None
+    visualize_directory(
+        args.input_dir,
+        upsample_factor=args.upsample_factor,
+        base_image_path=args.base_image,
+        overlay_config=overlay_conf,
+    )
 
 
 if __name__ == "__main__":

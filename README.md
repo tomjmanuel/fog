@@ -24,6 +24,23 @@ Options:
 
 This will save a NetCDF file for channel C02 in the specified directory.
 
+### Visualizer overlay configuration
+
+When plotting the fog visualizations you can overlay channel 2 radiance on a
+high-resolution base image by supplying an overlay configuration JSON file:
+
+```bash
+python -m fog.visualize \
+  --scene-time 2023-07-01T12:30:00 \
+  --overlay-config examples/channel2_overlay_config.json \
+  --base-image /path/to/high_res_base.png
+```
+
+An example overlay configuration is provided in
+`examples/channel2_overlay_config.json`. The bounding box corresponds to a
+high-resolution image spanning the latitude/longitude corners `(37.268569,
+-122.984661)` and `(38.390362, -121.731963)`.
+
 ## Project Structure
 
 ```
