@@ -17,7 +17,7 @@ from typing import Iterable, Mapping, Sequence
 import numpy as np
 import xarray as xr
 
-from .projection import extent_from_dataset
+from .projection import extent_from_dataset, lonlat_edges_grid
 
 
 def _arg_parser() -> argparse.ArgumentParser:
@@ -132,20 +132,13 @@ def _maybe_upsample(da: xr.DataArray, factor: int) -> xr.DataArray:
     ny, nx = int(da.sizes[ydim]), int(da.sizes[xdim])
     new_nx = max(1, int(nx * factor))
     new_ny = max(1, int(ny * factor))
-    # Ensure pixel coordinate variables exist and are non-empty
-    if (
-        xdim not in da.coords
-        or int(getattr(da.coords.get(xdim), "size", 0)) == 0
-    ):
-        da = da.assign_coords({xdim: np.arange(nx)})
-    if (
-        ydim not in da.coords
-        or int(getattr(da.coords.get(ydim), "size", 0)) == 0
-    ):
-        da = da.assign_coords({ydim: np.arange(ny)})
+
+    # Always perform interpolation in pixel-index space to avoid mixing with
+    # geolocation/scan-angle coordinates that can cause NaNs.
+    da_indexed = da.assign_coords({xdim: np.arange(nx), ydim: np.arange(ny)})
     xi = np.linspace(0, nx - 1, new_nx)
     yi = np.linspace(0, ny - 1, new_ny)
-    return da.interp({xdim: xi, ydim: yi})
+    return da_indexed.interp({xdim: xi, ydim: yi})
 
 
 def _extent_from_projection(dataset: xr.Dataset) -> Sequence[float] | None:
@@ -184,77 +177,114 @@ def visualize_directory(input_dir: Path, upsample_factor: int = 1) -> None:
             f"No NetCDF channel files found in {input_dir}"
         )
 
-    n = len(files)
-    ncols = 2
-    fig, axes = plt.subplots(
-        n, ncols, figsize=(12, max(3 * n, 3)), squeeze=False
-    )
-
-    for row_index, path in enumerate(files):
+    for path in files:
         # Always load fully to avoid lazy/dask surprises
         ds = xr.open_dataset(path, engine="h5netcdf").load()
         rad = _select_radiance_variable(ds)
         # Handle empty arrays gracefully (e.g., no coverage in subset files)
         ydim, xdim = rad.dims[-2:]
         ny, nx = int(rad.sizes[ydim]), int(rad.sizes[xdim])
-        ax_r = axes[row_index, 0]
-        ax_t = axes[row_index, 1]
         ch = _extract_channel_id(path)
+
         if ny == 0 or nx == 0:
-            ax_r.set_title(f"{ch} (empty)")
-            ax_r.text(0.5, 0.5, "No data in region", ha="center", va="center")
-            ax_r.set_xticks([])
-            ax_r.set_yticks([])
-            ax_t.set_visible(False)
+            fig, ax = plt.subplots(1, 1, figsize=(8, 4))
+            ax.set_title(f"{ch} (empty)")
+            ax.text(0.5, 0.5, "No data in region", ha="center", va="center")
+            ax.set_xticks([])
+            ax.set_yticks([])
+            fig.suptitle(
+                f"GOES-18 ABI L1b | {path.name}"
+            )
+            fig.tight_layout()
             continue
+
         rad = _maybe_upsample(rad, upsample_factor)
         bt = _compute_brightness_temperature(rad, {**ds.attrs, **rad.attrs})
         extent = _extent_from_lonlat(ds)
+
+        if bt is not None:
+            fig, (ax_r, ax_t) = plt.subplots(1, 2, figsize=(14, 5))
+        else:
+            fig, ax_r = plt.subplots(1, 1, figsize=(7, 5))
 
         # Radiance plot
         r = rad.values
         r_vmin = np.nanpercentile(r, 2.0)
         r_vmax = np.nanpercentile(r, 98.0)
-        im_r = ax_r.imshow(
-            r,
-            origin="upper",
-            cmap="viridis",
-            vmin=r_vmin,
-            vmax=r_vmax,
-            extent=extent,
-            aspect="auto",
-        )
+        try:
+            lon_e, lat_e = lonlat_edges_grid(
+                ds, upsample_factor=upsample_factor
+            )
+            im_r = ax_r.pcolormesh(
+                lon_e,
+                lat_e,
+                r,
+                cmap="viridis",
+                vmin=r_vmin,
+                vmax=r_vmax,
+                shading="auto",
+            )
+            ax_r.set_xlabel("Longitude")
+            ax_r.set_ylabel("Latitude")
+        except Exception:
+            # Fallback to extent-based imshow if projection metadata is missing
+            im_r = ax_r.imshow(
+                r,
+                origin="upper",
+                cmap="viridis",
+                vmin=r_vmin,
+                vmax=r_vmax,
+                extent=extent,
+                aspect="auto",
+            )
+            if extent is not None:
+                ax_r.set_xlabel("Longitude")
+                ax_r.set_ylabel("Latitude")
         ax_r.set_title(f"{ch} Radiance")
         cbar_r = fig.colorbar(im_r, ax=ax_r, fraction=0.046, pad=0.04)
         cbar_r.set_label(rad.attrs.get("units", ""))
-        if extent is not None:
-            ax_r.set_xlabel("Longitude")
-            ax_r.set_ylabel("Latitude")
 
         # Temperature plot (if available)
         if bt is not None:
             t = bt.values
             t_vmin = np.nanpercentile(t, 2.0)
             t_vmax = np.nanpercentile(t, 98.0)
-            im_t = ax_t.imshow(
-                t,
-                origin="upper",
-                cmap="inferno",
-                vmin=t_vmin,
-                vmax=t_vmax,
-                extent=extent,
-                aspect="auto",
-            )
+            used_t_pcolormesh = False
+            try:
+                lon_e, lat_e = lonlat_edges_grid(
+                    ds, upsample_factor=upsample_factor
+                )
+                im_t = ax_t.pcolormesh(
+                    lon_e,
+                    lat_e,
+                    t,
+                    cmap="inferno",
+                    vmin=t_vmin,
+                    vmax=t_vmax,
+                    shading="auto",
+                )
+                used_t_pcolormesh = True
+                ax_t.set_xlabel("Longitude")
+            except Exception:
+                im_t = ax_t.imshow(
+                    t,
+                    origin="upper",
+                    cmap="inferno",
+                    vmin=t_vmin,
+                    vmax=t_vmax,
+                    extent=extent,
+                    aspect="auto",
+                )
             ax_t.set_title(f"{ch} Brightness Temperature (K)")
             cbar_t = fig.colorbar(im_t, ax=ax_t, fraction=0.046, pad=0.04)
             cbar_t.set_label("K")
-            if extent is not None:
+            if extent is not None and not used_t_pcolormesh:
+                # If we fell back to imshow, label via extent availability
                 ax_t.set_xlabel("Longitude")
-        else:
-            ax_t.set_visible(False)
 
-    fig.suptitle(f"GOES-18 ABI L1b | {input_dir}")
-    fig.tight_layout()
+        fig.suptitle(f"GOES-18 ABI L1b | {path.name}")
+        fig.tight_layout()
+
     plt.show()
 
 
