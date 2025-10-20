@@ -18,6 +18,7 @@ except ModuleNotFoundError:  # pragma: no cover - handled lazily at runtime
 
 from .config import GOESConfig
 
+logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger(__name__)
 
 ABI_PROJECTION = {
@@ -111,19 +112,49 @@ def open_dataset(
             f"No {product} objects found for {scene_time.isoformat()}"
         )
     fs = _fs(config)
-    uris = [
-        f"s3://{key}" if not key.startswith("s3://") else key for key in keys
-    ]
-    LOGGER.info("Opening %s datasets: %d granules", product, len(uris))
-    # Always open and eagerly load datasets into memory for robustness
+    # Select the single granule whose timestamp is closest to scene_time
+    # to avoid stacking multiple scans.
+    scene_time_utc = (
+        scene_time.replace(tzinfo=timezone.utc)
+        if scene_time.tzinfo is None
+        else scene_time.astimezone(timezone.utc)
+    )
+    candidates: list[tuple[datetime, str]] = []
+    for key in keys:
+        parts = key.split("_")
+        try:
+            timestamp = parts[3][1:14]
+            t = datetime.strptime(timestamp, "%Y%j%H%M%S").replace(
+                tzinfo=timezone.utc
+            )
+            candidates.append((t, key))
+        except Exception:
+            continue
+    if not candidates:
+        # Fallback: use the first key
+        chosen_key = keys[0]
+    else:
+        chosen_t, chosen_key = min(
+            candidates,
+            key=lambda tk: abs((tk[0] - scene_time_utc).total_seconds()),
+        )
+    uri = (
+        f"s3://{chosen_key}"
+        if not chosen_key.startswith("s3://")
+        else chosen_key
+    )
+    delta_s = (
+        abs((chosen_t - scene_time_utc).total_seconds()) if candidates else 0.0
+    )
+    LOGGER.info(
+        "Opening nearest granule for %s: %s (Δ=%.1fs)",
+        product,
+        chosen_key,
+        delta_s,
+    )
     open_kwargs = {"engine": "h5netcdf"}
-    loaded: list[xr.Dataset] = []
-    for uri in uris:
-        ds = xr.open_dataset(fs.open(uri, mode="rb"), **open_kwargs)
-        loaded.append(ds.load())
-    if len(loaded) > 1:
-        return xr.concat(loaded, dim="y").load()
-    return loaded[0]
+    ds = xr.open_dataset(fs.open(uri, mode="rb"), **open_kwargs)
+    return ds.load()
 
 
 def fetch_ABI_L1b(
@@ -149,6 +180,25 @@ def subset_sector(dataset: xr.Dataset, sector: SectorDefinition) -> xr.Dataset:
     if x is None or y is None:
         raise ValueError("Dataset missing GOES projection coordinates")
     lon2d, lat2d = abi_xy_to_lonlat(x.values, y.values)
+    try:
+        lon_min = float(np.nanmin(lon2d))
+        lon_max = float(np.nanmax(lon2d))
+        lat_min = float(np.nanmin(lat2d))
+        lat_max = float(np.nanmax(lat2d))
+        LOGGER.info(
+            "Scene lon/lat bounds: lon[%.2f, %.2f], lat[%.2f, %.2f]; "
+            "sector west=%.2f east=%.2f south=%.2f north=%.2f",
+            lon_min,
+            lon_max,
+            lat_min,
+            lat_max,
+            sector.west,
+            sector.east,
+            sector.south,
+            sector.north,
+        )
+    except Exception:
+        pass
     ds = dataset.assign_coords(
         {
             "lon": (("y", "x"), lon2d),
@@ -159,6 +209,13 @@ def subset_sector(dataset: xr.Dataset, sector: SectorDefinition) -> xr.Dataset:
     lat_mask = (lat2d >= sector.south) & (lat2d <= sector.north)
     mask = lon_mask & lat_mask
     if mask.ndim == 2:
+        if not np.any(mask):
+            # If nothing intersects, return the original dataset instead of
+            # an empty slice
+            LOGGER.warning(
+                "Sector subsetting found no overlap; returning full dataset"
+            )
+            return ds
         valid_rows = np.any(mask, axis=1)
         valid_cols = np.any(mask, axis=0)
         return ds.isel(y=valid_rows, x=valid_cols)
@@ -178,7 +235,9 @@ def abi_xy_to_lonlat(
     )
     r_eq = ABI_PROJECTION["semi_major_axis"]  # Equatorial radius (~6378137 m)
     r_pol = ABI_PROJECTION["semi_minor_axis"]  # Polar radius (~6356752.31 m)
-    H = 35786023.0  # Altitude of the satellite (≈35786023 m)
+    # GOES perspective point height (distance from Earth's center), not
+    # altitude above the surface. From NOAA docs: ~42164 km.
+    H = 42164_000.0
 
     x_rad = np.asarray(x)
     y_rad = np.asarray(y)
@@ -230,7 +289,18 @@ def download_channels(
             f"{scene_time:%Y%m%dT%H%M%S}_SF.nc"
         )
         path = output_dir / fname
-        ds.to_netcdf(path)
+        # Ensure coordinate variables are saved as float to avoid integer
+        # encoding warnings from xarray/netCDF.
+        coord_float32: Dict[str, Dict[str, str]] = {}
+        for v in ("x", "y", "lon", "lat"):
+            if v in ds.variables:
+                coord_float32[v] = {"dtype": "float32"}
+                # Clear any inherited encodings that might force integer dtypes
+                try:
+                    ds[v].encoding.clear()
+                except Exception:
+                    pass
+        ds.to_netcdf(path, encoding=coord_float32)
         saved[channel] = str(path)
     return saved
 
