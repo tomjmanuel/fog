@@ -169,12 +169,17 @@ def subset_sector(dataset: xr.Dataset, sector: SectorDefinition) -> xr.Dataset:
 def abi_xy_to_lonlat(
     x: np.ndarray, y: np.ndarray
 ) -> Tuple[np.ndarray, np.ndarray]:
+    """Converts from GOES satellite projection coordinates (x, y radians)
+    to geographic coordinates (longitude, latitude in degrees).
+    This uses the fixed-grid projection parameters defined
+    in ABI_PROJECTION.
+    """
     lon0 = np.deg2rad(
         ABI_PROJECTION["longitude_of_projection_origin"]
     )
-    r_eq = ABI_PROJECTION["semi_major_axis"]
-    r_pol = ABI_PROJECTION["semi_minor_axis"]
-    H = 35786023.0
+    r_eq = ABI_PROJECTION["semi_major_axis"]  # Equatorial radius (≈6378137 m)
+    r_pol = ABI_PROJECTION["semi_minor_axis"]  # Polar radius (≈6356752.31414 m)
+    H = 35786023.0  # Altitude of the satellite (≈35786023 m)
 
     x_rad = np.asarray(x)
     y_rad = np.asarray(y)

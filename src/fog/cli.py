@@ -86,7 +86,7 @@ def main(argv: Iterable[str] | None = None) -> None:
     saved = download_channels(
         args.scene_time,
         args.output_dir,
-        channels=("C02", "C07", "C14"),
+        channels=("C01", "C02", "C03", "C07", "C13", "C14"),
         sector=args.sector,
         config=cfg,
     )
