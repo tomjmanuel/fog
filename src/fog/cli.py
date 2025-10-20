@@ -50,9 +50,7 @@ def _parse_sector(value: str) -> SectorDefinition:
 def build_parser() -> argparse.ArgumentParser:
     """Create the CLI argument parser."""
     parser = argparse.ArgumentParser(
-        description=(
-            "GOES-18 downloader: save C02, C07, C14 for SF sector"
-        ),
+        description=("GOES-18 downloader: save C02 for SF sector"),
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
@@ -82,11 +80,10 @@ def main(argv: Iterable[str] | None = None) -> None:
     args = parser.parse_args(argv)
 
     cfg = default_config()
-    console.log("Downloading ABI channels C02, C07, C14 for SF sector...")
+    console.log("Downloading ABI channel C02 for SF sector...")
     saved = download_channels(
         args.scene_time,
         args.output_dir,
-        channels=("C01", "C02", "C03", "C07", "C13", "C14"),
         sector=args.sector,
         config=cfg,
     )

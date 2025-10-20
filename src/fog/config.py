@@ -34,7 +34,7 @@ class GOESConfig:
     product: str = "ABI-L1b-RadC"
     bucket: str = "noaa-goes18"
     region: str = "M6"
-    channels: Tuple[str, ...] = ("C02", "C07", "C14")
+    channels: Tuple[str, ...] = ("C02",)
     cache_dir: str | None = None
     max_concurrent: int = 4
     timeout: int = 300

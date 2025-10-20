@@ -1,6 +1,6 @@
 # Minimal GOES-18 Downloader (SF sector)
 
-This repository contains a tiny utility to download GOES-18 ABI Level-1b channel data
+This repository contains a tiny utility to download GOES-18 ABI Level-1b channel 2 data
 for the San Francisco sector and save it locally as NetCDF.
 
 ## Install
@@ -22,7 +22,7 @@ python -m fog.cli \
 Options:
 - `--sector`: override bounding box as `west,south,east,north` if needed. Defaults to SF sector.
 
-This will save NetCDF files for channels C02, C07, and C14 in the specified directory.
+This will save a NetCDF file for channel C02 in the specified directory.
 
 ## Project Structure
 
