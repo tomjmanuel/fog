@@ -21,6 +21,38 @@ from .projection import extent_from_dataset, lonlat_edges_grid
 from .config import OverlayConfig, load_overlay_config
 
 
+def _cells_within_bbox(
+    lon_edges: np.ndarray,
+    lat_edges: np.ndarray,
+    bbox: Sequence[float],
+) -> np.ndarray:
+    """Return a mask selecting grid cells that intersect ``bbox``."""
+
+    lon_min, lon_max, lat_min, lat_max = bbox
+    # Compute cell centers from the supplied edge arrays. ``lonlat_edges_grid``
+    # returns arrays with shape (ny + 1, nx + 1); the radiance grid has shape
+    # (ny, nx). We average the four surrounding edges to obtain the center.
+    lon_center = (
+        lon_edges[:-1, :-1]
+        + lon_edges[1:, :-1]
+        + lon_edges[:-1, 1:]
+        + lon_edges[1:, 1:]
+    ) * 0.25
+    lat_center = (
+        lat_edges[:-1, :-1]
+        + lat_edges[1:, :-1]
+        + lat_edges[:-1, 1:]
+        + lat_edges[1:, 1:]
+    ) * 0.25
+
+    return (
+        (lon_center >= lon_min)
+        & (lon_center <= lon_max)
+        & (lat_center >= lat_min)
+        & (lat_center <= lat_max)
+    )
+
+
 def _arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
@@ -245,6 +277,9 @@ def visualize_directory(
                 origin="upper",
                 aspect="auto",
             )
+            if base_extent is not None:
+                ax_r.set_xlim(base_extent[0], base_extent[1])
+                ax_r.set_ylim(base_extent[3], base_extent[2])
         elif bt is not None:
             fig, (ax_r, ax_t) = plt.subplots(1, 2, figsize=(14, 5))
         else:
@@ -254,16 +289,25 @@ def visualize_directory(
         r = rad.values
         r_vmin = np.nanpercentile(r, 2.0)
         r_vmax = np.nanpercentile(r, 98.0)
+        cmap = "gray" if base_image is not None and is_channel_two else "viridis"
+        alpha_values = None
         try:
             lon_e, lat_e = lonlat_edges_grid(
                 ds, upsample_factor=upsample_factor
             )
-            alpha_values = _alpha_from_values(r) if base_image is not None and is_channel_two else None
+            data_to_plot = r
+            if base_image is not None and is_channel_two and base_extent is not None:
+                mask = _cells_within_bbox(lon_e, lat_e, base_extent)
+                data_to_plot = np.where(mask, r, np.nan)
+                alpha_mask = _alpha_from_values(r)
+                alpha_values = np.where(mask, alpha_mask, 0.0)
+            elif base_image is not None and is_channel_two:
+                alpha_values = _alpha_from_values(r)
             im_r = ax_r.pcolormesh(
                 lon_e,
                 lat_e,
-                r,
-                cmap="viridis",
+                data_to_plot,
+                cmap=cmap,
                 vmin=r_vmin,
                 vmax=r_vmax,
                 shading="auto",
@@ -271,13 +315,16 @@ def visualize_directory(
             )
             ax_r.set_xlabel("Longitude")
             ax_r.set_ylabel("Latitude")
+            if base_image is not None and is_channel_two and base_extent is not None:
+                ax_r.set_xlim(base_extent[0], base_extent[1])
+                ax_r.set_ylim(base_extent[3], base_extent[2])
         except Exception:
             # Fallback to extent-based imshow if projection metadata is missing
             alpha_values = _alpha_from_values(r) if base_image is not None and is_channel_two else None
             im_r = ax_r.imshow(
                 r,
                 origin="upper",
-                cmap="viridis",
+                cmap=cmap,
                 vmin=r_vmin,
                 vmax=r_vmax,
                 extent=base_extent if base_image is not None and is_channel_two else extent,
@@ -287,6 +334,9 @@ def visualize_directory(
             if extent is not None:
                 ax_r.set_xlabel("Longitude")
                 ax_r.set_ylabel("Latitude")
+            if base_image is not None and is_channel_two and base_extent is not None:
+                ax_r.set_xlim(base_extent[0], base_extent[1])
+                ax_r.set_ylim(base_extent[3], base_extent[2])
         ax_r.set_title(f"{ch} Radiance")
         cbar_r = fig.colorbar(im_r, ax=ax_r, fraction=0.046, pad=0.04)
         cbar_r.set_label(rad.attrs.get("units", ""))
