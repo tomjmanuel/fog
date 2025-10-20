@@ -115,15 +115,15 @@ def open_dataset(
         f"s3://{key}" if not key.startswith("s3://") else key for key in keys
     ]
     LOGGER.info("Opening %s datasets: %d granules", product, len(uris))
-    open_kwargs = (
-        {"engine": "h5netcdf", "chunks": chunks}
-        if chunks
-        else {"engine": "h5netcdf"}
-    )
-    datasets = [
-        xr.open_dataset(fs.open(uri, mode="rb"), **open_kwargs) for uri in uris
-    ]
-    return xr.concat(datasets, dim="y") if len(datasets) > 1 else datasets[0]
+    # Always open and eagerly load datasets into memory for robustness
+    open_kwargs = {"engine": "h5netcdf"}
+    loaded: list[xr.Dataset] = []
+    for uri in uris:
+        ds = xr.open_dataset(fs.open(uri, mode="rb"), **open_kwargs)
+        loaded.append(ds.load())
+    if len(loaded) > 1:
+        return xr.concat(loaded, dim="y").load()
+    return loaded[0]
 
 
 def fetch_ABI_L1b(
@@ -140,8 +140,7 @@ def fetch_ABI_L1b(
         channel=channel,
     )
     subset = subset_sector(dataset, sector)
-    # Channel is already filtered in open_dataset, no need to select by band
-    return subset
+    return subset.load()
 
 
 def subset_sector(dataset: xr.Dataset, sector: SectorDefinition) -> xr.Dataset:
@@ -177,8 +176,8 @@ def abi_xy_to_lonlat(
     lon0 = np.deg2rad(
         ABI_PROJECTION["longitude_of_projection_origin"]
     )
-    r_eq = ABI_PROJECTION["semi_major_axis"]  # Equatorial radius (≈6378137 m)
-    r_pol = ABI_PROJECTION["semi_minor_axis"]  # Polar radius (≈6356752.31414 m)
+    r_eq = ABI_PROJECTION["semi_major_axis"]  # Equatorial radius (~6378137 m)
+    r_pol = ABI_PROJECTION["semi_minor_axis"]  # Polar radius (~6356752.31 m)
     H = 35786023.0  # Altitude of the satellite (≈35786023 m)
 
     x_rad = np.asarray(x)

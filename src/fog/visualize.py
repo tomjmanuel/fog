@@ -118,31 +118,32 @@ def _compute_brightness_temperature(
 
 
 def _maybe_upsample(da: xr.DataArray, factor: int) -> xr.DataArray:
-    if factor <= 1:
+    """Upsample a 2D array by an integer factor using pixel coordinates.
+
+    This avoids any reliance on projection coordinates and works even when
+    coordinate variables are missing or empty.
+    """
+    if factor <= 1 or da.ndim < 2:
         return da
-    x = da.coords.get("x")
-    y = da.coords.get("y")
-    if x is None or y is None:
-        # Fall back to naive pixel coordinates if projection axes are missing
-        ny, nx = da.shape
-        new_nx = int(nx * factor)
-        new_ny = int(ny * factor)
-        xi = np.linspace(0, nx - 1, new_nx)
-        yi = np.linspace(0, ny - 1, new_ny)
-        return (
-            da.rename({"dim_0": "y", "dim_1": "x"}, errors="ignore")
-            .interp(x=xi, y=yi)
-        )
-    # Build new coordinate vectors robustly even for lazy/dask-backed coords
-    x_dim = x.dims[0]
-    y_dim = y.dims[0]
-    x_start = float(x.isel({x_dim: 0}).values)
-    x_end = float(x.isel({x_dim: -1}).values)
-    y_start = float(y.isel({y_dim: 0}).values)
-    y_end = float(y.isel({y_dim: -1}).values)
-    new_x = np.linspace(x_start, x_end, int(x.size * factor))
-    new_y = np.linspace(y_start, y_end, int(y.size * factor))
-    return da.interp(x=new_x, y=new_y)
+    # Use the last two dims as y, x by convention
+    ydim, xdim = da.dims[-2:]
+    ny, nx = int(da.sizes[ydim]), int(da.sizes[xdim])
+    new_nx = max(1, int(nx * factor))
+    new_ny = max(1, int(ny * factor))
+    # Ensure pixel coordinate variables exist and are non-empty
+    if (
+        xdim not in da.coords
+        or int(getattr(da.coords.get(xdim), "size", 0)) == 0
+    ):
+        da = da.assign_coords({xdim: np.arange(nx)})
+    if (
+        ydim not in da.coords
+        or int(getattr(da.coords.get(ydim), "size", 0)) == 0
+    ):
+        da = da.assign_coords({ydim: np.arange(ny)})
+    xi = np.linspace(0, nx - 1, new_nx)
+    yi = np.linspace(0, ny - 1, new_ny)
+    return da.interp({xdim: xi, ydim: yi})
 
 
 def _extent_from_lonlat(dataset: xr.Dataset) -> Sequence[float] | None:
@@ -174,14 +175,27 @@ def visualize_directory(input_dir: Path, upsample_factor: int = 1) -> None:
     )
 
     for row_index, path in enumerate(files):
-        ds = xr.open_dataset(path, engine="h5netcdf")
+        # Always load fully to avoid lazy/dask surprises
+        ds = xr.open_dataset(path, engine="h5netcdf").load()
         rad = _select_radiance_variable(ds)
+        # Handle empty arrays gracefully (e.g., no coverage in subset files)
+        ydim, xdim = rad.dims[-2:]
+        ny, nx = int(rad.sizes[ydim]), int(rad.sizes[xdim])
+        ax_r = axes[row_index, 0]
+        ax_t = axes[row_index, 1]
+        ch = _extract_channel_id(path)
+        if ny == 0 or nx == 0:
+            ax_r.set_title(f"{ch} (empty)")
+            ax_r.text(0.5, 0.5, "No data in region", ha="center", va="center")
+            ax_r.set_xticks([])
+            ax_r.set_yticks([])
+            ax_t.set_visible(False)
+            continue
         rad = _maybe_upsample(rad, upsample_factor)
         bt = _compute_brightness_temperature(rad, {**ds.attrs, **rad.attrs})
         extent = _extent_from_lonlat(ds)
 
         # Radiance plot
-        ax_r = axes[row_index, 0]
         r = rad.values
         r_vmin = np.nanpercentile(r, 2.0)
         r_vmax = np.nanpercentile(r, 98.0)
@@ -194,7 +208,6 @@ def visualize_directory(input_dir: Path, upsample_factor: int = 1) -> None:
             extent=extent,
             aspect="auto",
         )
-        ch = _extract_channel_id(path)
         ax_r.set_title(f"{ch} Radiance")
         cbar_r = fig.colorbar(im_r, ax=ax_r, fraction=0.046, pad=0.04)
         cbar_r.set_label(rad.attrs.get("units", ""))
@@ -203,7 +216,6 @@ def visualize_directory(input_dir: Path, upsample_factor: int = 1) -> None:
             ax_r.set_ylabel("Latitude")
 
         # Temperature plot (if available)
-        ax_t = axes[row_index, 1]
         if bt is not None:
             t = bt.values
             t_vmin = np.nanpercentile(t, 2.0)
