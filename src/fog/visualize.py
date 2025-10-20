@@ -16,7 +16,8 @@ from typing import Iterable, Mapping, Sequence
 
 import numpy as np
 import xarray as xr
-from pyproj import CRS, Transformer
+
+from .projection import extent_from_dataset
 
 
 def _arg_parser() -> argparse.ArgumentParser:
@@ -150,43 +151,7 @@ def _maybe_upsample(da: xr.DataArray, factor: int) -> xr.DataArray:
 def _extent_from_projection(dataset: xr.Dataset) -> Sequence[float] | None:
     """Derive lon/lat extent using GOES geostationary projection metadata."""
 
-    proj_var = dataset.variables.get("goes_imager_projection")
-    x = dataset.coords.get("x")
-    y = dataset.coords.get("y")
-    if proj_var is None or x is None or y is None:
-        return None
-
-    if int(getattr(x, "size", 0)) == 0 or int(getattr(y, "size", 0)) == 0:
-        return None
-
-    try:
-        H = float(proj_var.perspective_point_height)
-        a = float(proj_var.semi_major_axis)
-        b = float(proj_var.semi_minor_axis)
-        lon0 = float(proj_var.longitude_of_projection_origin)
-        sweep = str(getattr(proj_var, "sweep_angle_axis", "x"))
-    except Exception:
-        return None
-
-    # GOES fixed grid coordinates are scan angles (radians). Convert to meters
-    x_m = np.array([x.values[0], x.values[-1]]) * H
-    y_m = np.array([y.values[0], y.values[-1]]) * H
-
-    # Build CRS and transform corner coordinates to lon/lat
-    crs_geos = CRS.from_proj4(
-        f"+proj=geos +lon_0={lon0} +h={H} +a={a} +b={b} +sweep={sweep} +units=m"
-    )
-    transformer = Transformer.from_crs(crs_geos, "EPSG:4326", always_xy=True)
-    X, Y = np.meshgrid(x_m, y_m)
-    lon_c, lat_c = transformer.transform(X, Y)
-
-    lon_min = float(np.nanmin(lon_c))
-    lon_max = float(np.nanmax(lon_c))
-    lat_min = float(np.nanmin(lat_c))
-    lat_max = float(np.nanmax(lat_c))
-    if not np.isfinite([lon_min, lon_max, lat_min, lat_max]).all():
-        return None
-    return [lon_min, lon_max, lat_min, lat_max]
+    return extent_from_dataset(dataset)
 
 
 def _extent_from_lonlat(dataset: xr.Dataset) -> Sequence[float] | None:

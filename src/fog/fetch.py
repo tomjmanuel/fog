@@ -17,19 +17,10 @@ except ModuleNotFoundError:  # pragma: no cover - handled lazily at runtime
     s3fs = None
 
 from .config import GOESConfig
+from .projection import project_xy_to_lonlat
 
 logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger(__name__)
-
-ABI_PROJECTION = {
-    "semi_major_axis": 6378137.0,
-    "semi_minor_axis": 6356752.31414,
-    "inverse_flattening": 298.2572221,
-    "latitude_of_projection_origin": 0.0,
-    "longitude_of_projection_origin": -137.0,
-    "sweep_angle_axis": "x",
-}
-
 
 @dataclass(slots=True)
 class SectorDefinition:
@@ -179,7 +170,7 @@ def subset_sector(dataset: xr.Dataset, sector: SectorDefinition) -> xr.Dataset:
     y = dataset.coords.get("y")
     if x is None or y is None:
         raise ValueError("Dataset missing GOES projection coordinates")
-    lon2d, lat2d = abi_xy_to_lonlat(x.values, y.values)
+    lon2d, lat2d = abi_xy_to_lonlat(x.values, y.values, dataset=dataset)
     try:
         lon_min = float(np.nanmin(lon2d))
         lon_max = float(np.nanmax(lon2d))
@@ -223,48 +214,14 @@ def subset_sector(dataset: xr.Dataset, sector: SectorDefinition) -> xr.Dataset:
 
 
 def abi_xy_to_lonlat(
-    x: np.ndarray, y: np.ndarray
+    x: np.ndarray,
+    y: np.ndarray,
+    *,
+    dataset: xr.Dataset,
 ) -> Tuple[np.ndarray, np.ndarray]:
-    """Converts from GOES satellite projection coordinates (x, y radians)
-    to geographic coordinates (longitude, latitude in degrees).
-    This uses the fixed-grid projection parameters defined
-    in ABI_PROJECTION.
-    """
-    lon0 = np.deg2rad(
-        ABI_PROJECTION["longitude_of_projection_origin"]
-    )
-    r_eq = ABI_PROJECTION["semi_major_axis"]  # Equatorial radius (~6378137 m)
-    r_pol = ABI_PROJECTION["semi_minor_axis"]  # Polar radius (~6356752.31 m)
-    # GOES perspective point height (distance from Earth's center), not
-    # altitude above the surface. From NOAA docs: ~42164 km.
-    H = 42164_000.0
+    """Convert GOES ``x``/``y`` scan angles to lon/lat using dataset metadata."""
 
-    x_rad = np.asarray(x)
-    y_rad = np.asarray(y)
-    if x_rad.ndim == 1 and y_rad.ndim == 1:
-        x_rad, y_rad = np.meshgrid(x_rad, y_rad)
-
-    cos_x = np.cos(x_rad)
-    cos_y = np.cos(y_rad)
-    sin_x = np.sin(x_rad)
-    sin_y = np.sin(y_rad)
-
-    a = (sin_x**2) + (cos_x**2) * (
-        (cos_y**2) + ((r_eq**2) / (r_pol**2)) * (sin_y**2)
-    )
-    under_sqrt = (H * cos_x * cos_y) ** 2 - (a * (H**2 - r_eq**2))
-    under_sqrt = np.maximum(under_sqrt, 0.0)
-    rs = (H * cos_x * cos_y) - np.sqrt(under_sqrt)
-    sx = rs * cos_y * sin_x
-    sy = -rs * sin_y
-    sz = rs * cos_y * cos_x
-
-    lon = lon0 + np.arctan2(sx, sz)
-    lat = np.arctan(
-        (r_eq**2 / r_pol**2) * (sy / np.sqrt(sx**2 + sz**2))
-    )
-
-    return np.rad2deg(lon), np.rad2deg(lat)
+    return project_xy_to_lonlat(x, y, dataset=dataset)
 
 
 def download_channels(
