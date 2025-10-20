@@ -1,15 +1,5 @@
-"""Minimal GOES-18 downloader for SF sector."""
+"""Public API for the stripped-down GOES-18 downloader."""
 
-from .config import GOESConfig
-from .fetch import (
-    SAN_FRANCISCO_SECTOR,
-    SectorDefinition,
-    download_channels,
-)
+from .fetch import download_channel_02
 
-__all__ = [
-    "GOESConfig",
-    "SAN_FRANCISCO_SECTOR",
-    "SectorDefinition",
-    "download_channels",
-]
+__all__ = ["download_channel_02"]

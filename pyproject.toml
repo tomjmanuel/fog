@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "fog"
 version = "0.1.0"
-description = "Minimal GOES-18 downloader for SF sector"
+description = "GOES-18 channel 02 downloader"
 authors = [{name = "OpenAI Assistant"}]
 readme = "README.md"
 requires-python = ">=3.9"
@@ -13,13 +13,9 @@ dependencies = [
     "s3fs>=2023.9.0",
     "xarray>=2023.7.0",
     "h5netcdf>=1.2",
-    "numpy>=1.24",
-    "rich>=13.0",
-    "matplotlib>=3.8"
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=7.4"
+    "pytest>=7.4",
 ]
-
