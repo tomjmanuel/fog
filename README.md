@@ -1,35 +1,16 @@
-# Minimal GOES-18 Downloader (SF sector)
+# fog
 
-This repository contains a tiny utility to download GOES-18 ABI Level-1b channel data
-for the San Francisco sector and save it locally as NetCDF.
-
-## Install
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -e .
-```
+A tiny helper that downloads a single GOES-18 ABI channel 02 granule for a
+requested scene time.
 
 ## Usage
 
+Install the package (or run with `python -m fog.cli`) and provide the scene time
+and an output directory:
+
 ```bash
-python -m fog.cli \
-  --scene-time 2023-07-01T12:30:00 \
-  --output-dir ./data
+python -m fog.cli --scene-time 2023-07-01T12:30 --output-dir ./data
 ```
 
-Options:
-- `--sector`: override bounding box as `west,south,east,north` if needed. Defaults to SF sector.
-
-This will save NetCDF files for channels C02, C07, and C14 in the specified directory.
-
-## Project Structure
-
-```
-src/fog/
-  __init__.py      # Public API (downloader)
-  config.py        # GOES configuration
-  fetch.py         # Data access + subsetting + download function
-  cli.py           # CLI entry point
-```
+The command downloads the first available C02 granule for the hour containing
+`scene-time` and saves it as a NetCDF file in the given directory.
