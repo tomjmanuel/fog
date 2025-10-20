@@ -16,6 +16,7 @@ from typing import Iterable, Mapping, Sequence
 
 import numpy as np
 import xarray as xr
+from pyproj import CRS, Transformer
 
 
 def _arg_parser() -> argparse.ArgumentParser:
@@ -146,17 +147,67 @@ def _maybe_upsample(da: xr.DataArray, factor: int) -> xr.DataArray:
     return da.interp({xdim: xi, ydim: yi})
 
 
+def _extent_from_projection(dataset: xr.Dataset) -> Sequence[float] | None:
+    """Derive lon/lat extent using GOES geostationary projection metadata."""
+
+    proj_var = dataset.variables.get("goes_imager_projection")
+    x = dataset.coords.get("x")
+    y = dataset.coords.get("y")
+    if proj_var is None or x is None or y is None:
+        return None
+
+    if int(getattr(x, "size", 0)) == 0 or int(getattr(y, "size", 0)) == 0:
+        return None
+
+    try:
+        H = float(proj_var.perspective_point_height)
+        a = float(proj_var.semi_major_axis)
+        b = float(proj_var.semi_minor_axis)
+        lon0 = float(proj_var.longitude_of_projection_origin)
+        sweep = str(getattr(proj_var, "sweep_angle_axis", "x"))
+    except Exception:
+        return None
+
+    # GOES fixed grid coordinates are scan angles (radians). Convert to meters
+    x_m = np.array([x.values[0], x.values[-1]]) * H
+    y_m = np.array([y.values[0], y.values[-1]]) * H
+
+    # Build CRS and transform corner coordinates to lon/lat
+    crs_geos = CRS.from_proj4(
+        f"+proj=geos +lon_0={lon0} +h={H} +a={a} +b={b} +sweep={sweep} +units=m"
+    )
+    transformer = Transformer.from_crs(crs_geos, "EPSG:4326", always_xy=True)
+    X, Y = np.meshgrid(x_m, y_m)
+    lon_c, lat_c = transformer.transform(X, Y)
+
+    lon_min = float(np.nanmin(lon_c))
+    lon_max = float(np.nanmax(lon_c))
+    lat_min = float(np.nanmin(lat_c))
+    lat_max = float(np.nanmax(lat_c))
+    if not np.isfinite([lon_min, lon_max, lat_min, lat_max]).all():
+        return None
+    return [lon_min, lon_max, lat_min, lat_max]
+
+
 def _extent_from_lonlat(dataset: xr.Dataset) -> Sequence[float] | None:
     lon = dataset.coords.get("lon")
     lat = dataset.coords.get("lat")
-    if lon is None or lat is None:
-        return None
-    # Compute a simple bounding box; imshow uses [xmin, xmax, ymin, ymax]
-    lon_min = float(np.nanmin(lon.values))
-    lon_max = float(np.nanmax(lon.values))
-    lat_min = float(np.nanmin(lat.values))
-    lat_max = float(np.nanmax(lat.values))
-    return [lon_min, lon_max, lat_min, lat_max]
+    if lon is not None and lat is not None:
+        lon_vals = np.asarray(lon.values)
+        lat_vals = np.asarray(lat.values)
+        if lon_vals.size and lat_vals.size:
+            lon_min = float(np.nanmin(lon_vals))
+            lon_max = float(np.nanmax(lon_vals))
+            lat_min = float(np.nanmin(lat_vals))
+            lat_max = float(np.nanmax(lat_vals))
+            if (
+                np.isfinite([lon_min, lon_max, lat_min, lat_max]).all()
+                and lon_min != lon_max
+                and lat_min != lat_max
+            ):
+                return [lon_min, lon_max, lat_min, lat_max]
+
+    return _extent_from_projection(dataset)
 
 
 def visualize_directory(input_dir: Path, upsample_factor: int = 1) -> None:

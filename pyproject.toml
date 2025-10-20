@@ -15,7 +15,8 @@ dependencies = [
     "h5netcdf>=1.2",
     "numpy>=1.24",
     "rich>=13.0",
-    "matplotlib>=3.8"
+    "matplotlib>=3.8",
+    "pyproj>=3.6"
 ]
 
 [project.optional-dependencies]
