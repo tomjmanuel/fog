@@ -228,7 +228,7 @@ def download_channels(
     scene_time: datetime,
     output_dir: Path,
     *,
-    channels: Iterable[str] = ("C02", "C07", "C14"),
+    channels: Iterable[str] | None = None,
     sector: SectorDefinition = SAN_FRANCISCO_SECTOR,
     config: GOESConfig | None = None,
 ) -> Dict[str, str]:
@@ -237,9 +237,10 @@ def download_channels(
     Returns a mapping of channel -> saved file path.
     """
     cfg = config or GOESConfig()
+    channel_list = list(channels) if channels is not None else cfg.channel_list()
     output_dir.mkdir(parents=True, exist_ok=True)
     saved: Dict[str, str] = {}
-    for channel in channels:
+    for channel in channel_list:
         ds = fetch_ABI_L1b(channel, scene_time, sector, cfg)
         fname = (
             f"goes18_{cfg.product}_{channel}_"
