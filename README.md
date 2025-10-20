@@ -1,20 +1,9 @@
-# GOES-18 Fog Probability Toolkit
+# Minimal GOES-18 Downloader (SF sector)
 
-This repository provides a starting point for working with GOES-18 Advanced Baseline Imager (ABI)
-Level-1b/Level-2 datasets to estimate the probability of fog over the San Francisco Bay Area.
-It focuses on efficient data access, geospatial subsetting, and a modular implementation of
-a fog-probability algorithm inspired by NOAA's low stratus/fog product.
+This repository contains a tiny utility to download GOES-18 ABI Level-1b channel data
+for the San Francisco sector and save it locally as NetCDF.
 
-## Features
-
-- Minimal configuration layer for selecting GOES products, channels, and geographic sectors.
-- Lazy, on-demand access to the NOAA GOES-18 S3 archive using `s3fs` and `xarray`.
-- Geographic subsetting helpers tuned for the San Francisco coastline.
-- Projection utilities and high-resolution grid generation for enhanced visualization.
-- A direct translation of the provided fog probability pseudo-code with placeholders for lookup tables.
-- CLI script (`python -m fog.cli --scene-time <iso-timestamp>`) to fetch data and compute fog probabilities for a given scene.
-
-## Installation
+## Install
 
 ```bash
 python -m venv .venv
@@ -22,36 +11,25 @@ source .venv/bin/activate
 pip install -e .
 ```
 
-Install the optional development dependencies for linting/testing:
-
-```bash
-pip install -e .[dev]
-```
-
 ## Usage
 
 ```bash
-python -m fog.cli --scene-time 2023-07-01T12:30:00
+python -m fog.cli \
+  --scene-time 2023-07-01T12:30:00 \
+  --output-dir ./data
 ```
 
-Use the `--sector` option to specify a custom bounding box (`west,south,east,north`).
-A `--cache-dir` option is available to point to a writable directory for caching remote granules.
+Options:
+- `--sector`: override bounding box as `west,south,east,north` if needed. Defaults to SF sector.
+
+This will save NetCDF files for channels C02, C07, and C14 in the specified directory.
 
 ## Project Structure
 
 ```
 src/fog/
-    __init__.py             # Public API
-    config.py               # GOES configuration dataclass
-    fetch.py                # Data access helpers (S3 + subsetting)
-    projection.py           # Projection, grid, and resampling utilities
-    probability.py          # Fog probability algorithm + diagnostics
-    cli.py                  # argparse-based CLI entrypoint
+  __init__.py      # Public API (downloader)
+  config.py        # GOES configuration
+  fetch.py         # Data access + subsetting + download function
+  cli.py           # CLI entry point
 ```
-
-## Next Steps
-
-The lookup tables used by the probability algorithm are placeholders that return constant values.
-To make the product operational, replace `load_LUT` with logic that loads precomputed tables from disk
-or a database. Additional validation (quality flags, land/sea masking) can be layered on top of the
-provided scaffolding.

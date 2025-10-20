@@ -1,11 +1,15 @@
-"""GOES-18 fog probability toolkit."""
+"""Minimal GOES-18 downloader for SF sector."""
 
 from .config import GOESConfig
-from .probability import build_fog_probability, build_fog_mask_with_objects, estimate_fog_depth
+from .fetch import (
+    SAN_FRANCISCO_SECTOR,
+    SectorDefinition,
+    download_channels,
+)
 
 __all__ = [
     "GOESConfig",
-    "build_fog_probability",
-    "build_fog_mask_with_objects",
-    "estimate_fog_depth",
+    "SAN_FRANCISCO_SECTOR",
+    "SectorDefinition",
+    "download_channels",
 ]
