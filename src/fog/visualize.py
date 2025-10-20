@@ -214,8 +214,8 @@ def _extent_from_lonlat(dataset: xr.Dataset) -> Sequence[float] | None:
 def _alpha_from_values(values: np.ndarray) -> np.ndarray:
     """Generate alpha values for radiance data using a lookup table."""
 
-    table_values = np.array([0.0, 75.0, 200.0])
-    table_alpha = np.array([0.0, 0.0, 1.0])
+    table_values = np.array([0.0, 75.0, 100.0, 200.0])
+    table_alpha = np.array([0.0, 0.0, 0.5, 0.7])
     clipped = np.clip(values, table_values[0], table_values[-1])
     return np.interp(clipped, table_values, table_alpha)
 
@@ -227,6 +227,19 @@ def visualize_directory(
     overlay_config: OverlayConfig | None = None,
 ) -> None:
     import matplotlib.pyplot as plt
+    plt.style.use("dark_background")
+    plt.rcParams['axes.facecolor'] = 'black'
+    plt.rcParams['figure.facecolor'] = 'black'
+    plt.rcParams['savefig.facecolor'] = 'black'
+    plt.rcParams['savefig.transparent'] = True
+    plt.rcParams['text.color'] = 'white'
+    plt.rcParams['axes.titlecolor'] = 'white'
+    plt.rcParams['xtick.major.size'] = 0
+    plt.rcParams['ytick.major.size'] = 0
+    plt.rcParams['xtick.minor.size'] = 0 
+    plt.rcParams['ytick.minor.size'] = 0
+    plt.rcParams['xtick.labelbottom'] = False
+    plt.rcParams['ytick.labelleft'] = False
 
     files = _find_channel_files(input_dir)
     if not files:
@@ -274,8 +287,8 @@ def visualize_directory(
             ax_r.imshow(
                 base_image,
                 extent=base_extent,
-                origin="upper",
-                aspect="auto",
+                origin="lower",
+                aspect="equal",
             )
             if base_extent is not None:
                 ax_r.set_xlim(base_extent[0], base_extent[1])
