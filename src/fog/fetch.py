@@ -5,7 +5,8 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from functools import lru_cache
-from typing import Mapping, Tuple
+from pathlib import Path
+from typing import Mapping, Tuple, Iterable, Dict
 
 import numpy as np
 import xarray as xr
@@ -68,7 +69,11 @@ def _fs(config: GOESConfig):
 
 
 def list_scene_objects(
-    config: GOESConfig, scene_time: datetime, product: str, *, channel: str | None = None
+    config: GOESConfig,
+    scene_time: datetime,
+    product: str,
+    *,
+    channel: str | None = None,
 ) -> list[str]:
     start, end = config.valid_time_window(scene_time)
     prefix = config.object_key_prefix(scene_time, product=product)
@@ -106,59 +111,37 @@ def open_dataset(
             f"No {product} objects found for {scene_time.isoformat()}"
         )
     fs = _fs(config)
-    uris = [f"s3://{key}" if not key.startswith("s3://") else key for key in keys]
+    uris = [
+        f"s3://{key}" if not key.startswith("s3://") else key for key in keys
+    ]
     LOGGER.info("Opening %s datasets: %d granules", product, len(uris))
-    open_kwargs = {"engine": "h5netcdf", "chunks": chunks} if chunks else {"engine": "h5netcdf"}
-    datasets = [xr.open_dataset(fs.open(uri, mode="rb"), **open_kwargs) for uri in uris]
+    open_kwargs = (
+        {"engine": "h5netcdf", "chunks": chunks}
+        if chunks
+        else {"engine": "h5netcdf"}
+    )
+    datasets = [
+        xr.open_dataset(fs.open(uri, mode="rb"), **open_kwargs) for uri in uris
+    ]
     return xr.concat(datasets, dim="y") if len(datasets) > 1 else datasets[0]
 
 
-def fetch_ABI_L1b(channel: str, scene_time: datetime, sector: SectorDefinition, config: GOESConfig) -> xr.Dataset:
+def fetch_ABI_L1b(
+    channel: str,
+    scene_time: datetime,
+    sector: SectorDefinition,
+    config: GOESConfig,
+) -> xr.Dataset:
     product = config.product
-    dataset = open_dataset(config, scene_time, product=product, channel=channel)
+    dataset = open_dataset(
+        config,
+        scene_time,
+        product=product,
+        channel=channel,
+    )
     subset = subset_sector(dataset, sector)
     # Channel is already filtered in open_dataset, no need to select by band
     return subset
-
-
-def fetch_ABI_geolocation(scene_time: datetime, sector: SectorDefinition, config: GOESConfig) -> xr.Dataset:
-    product = "ABI-L2-MCMIPC"
-    dataset = open_dataset(config, scene_time, product=product)
-    return subset_sector(dataset, sector)
-
-
-def fetch_ABI_cloud_mask(scene_time: datetime, sector: SectorDefinition, config: GOESConfig) -> xr.DataArray:
-    ds = fetch_ABI_geolocation(scene_time, sector, config)
-    return ds["Cloud_Mask"]
-
-
-def fetch_ABI_cloud_phase(scene_time: datetime, sector: SectorDefinition, config: GOESConfig) -> xr.DataArray:
-    product = "ABI-L2-CMIPF"
-    ds = open_dataset(config, scene_time, product=product)
-    return subset_sector(ds, sector)["Phase_Retrieval"]
-
-
-def fetch_ABI_LWP(scene_time: datetime, sector: SectorDefinition, config: GOESConfig) -> xr.DataArray:
-    product = "ABI-L2-LWPRad"
-    ds = open_dataset(config, scene_time, product=product)
-    return subset_sector(ds, sector)["LWP"]
-
-
-def fetch_surface_emissivity_maps(channel39: float, channel11: float, sector: SectorDefinition) -> Tuple[np.ndarray, np.ndarray]:
-    shape = (100, 100)
-    return np.full(shape, 0.95, dtype=np.float32), np.full(shape, 0.98, dtype=np.float32)
-
-
-def fetch_NWP_surface_temperature(scene_time: datetime, sector: SectorDefinition) -> np.ndarray:
-    shape = (100, 100)
-    return np.full(shape, 285.0, dtype=np.float32)
-
-
-def fetch_clear_sky_transmittance_and_radiance(channel: float, scene_time: datetime, sector: SectorDefinition):
-    shape = (100, 100)
-    tau = np.full(shape, 0.98, dtype=np.float32)
-    ratm = np.full(shape, 1.0, dtype=np.float32)
-    return tau, ratm
 
 
 def subset_sector(dataset: xr.Dataset, sector: SectorDefinition) -> xr.Dataset:
@@ -167,7 +150,12 @@ def subset_sector(dataset: xr.Dataset, sector: SectorDefinition) -> xr.Dataset:
     if x is None or y is None:
         raise ValueError("Dataset missing GOES projection coordinates")
     lon2d, lat2d = abi_xy_to_lonlat(x.values, y.values)
-    ds = dataset.assign_coords({"lon": (("y", "x"), lon2d), "lat": (("y", "x"), lat2d)})
+    ds = dataset.assign_coords(
+        {
+            "lon": (("y", "x"), lon2d),
+            "lat": (("y", "x"), lat2d),
+        }
+    )
     lon_mask = (lon2d >= sector.west) & (lon2d <= sector.east)
     lat_mask = (lat2d >= sector.south) & (lat2d <= sector.north)
     mask = lon_mask & lat_mask
@@ -178,8 +166,12 @@ def subset_sector(dataset: xr.Dataset, sector: SectorDefinition) -> xr.Dataset:
     return ds
 
 
-def abi_xy_to_lonlat(x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-    lon0 = np.deg2rad(ABI_PROJECTION["longitude_of_projection_origin"])
+def abi_xy_to_lonlat(
+    x: np.ndarray, y: np.ndarray
+) -> Tuple[np.ndarray, np.ndarray]:
+    lon0 = np.deg2rad(
+        ABI_PROJECTION["longitude_of_projection_origin"]
+    )
     r_eq = ABI_PROJECTION["semi_major_axis"]
     r_pol = ABI_PROJECTION["semi_minor_axis"]
     H = 35786023.0
@@ -194,7 +186,9 @@ def abi_xy_to_lonlat(x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarr
     sin_x = np.sin(x_rad)
     sin_y = np.sin(y_rad)
 
-    a = (sin_x**2) + (cos_x**2) * ((cos_y**2) + ((r_eq**2) / (r_pol**2)) * (sin_y**2))
+    a = (sin_x**2) + (cos_x**2) * (
+        (cos_y**2) + ((r_eq**2) / (r_pol**2)) * (sin_y**2)
+    )
     under_sqrt = (H * cos_x * cos_y) ** 2 - (a * (H**2 - r_eq**2))
     under_sqrt = np.maximum(under_sqrt, 0.0)
     rs = (H * cos_x * cos_y) - np.sqrt(under_sqrt)
@@ -203,22 +197,45 @@ def abi_xy_to_lonlat(x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarr
     sz = rs * cos_y * cos_x
 
     lon = lon0 + np.arctan2(sx, sz)
-    lat = np.arctan((r_eq ** 2 / r_pol ** 2) * (sy / np.sqrt(sx ** 2 + sz ** 2)))
+    lat = np.arctan(
+        (r_eq**2 / r_pol**2) * (sy / np.sqrt(sx**2 + sz**2))
+    )
 
     return np.rad2deg(lon), np.rad2deg(lat)
+
+
+def download_channels(
+    scene_time: datetime,
+    output_dir: Path,
+    *,
+    channels: Iterable[str] = ("C02", "C07", "C14"),
+    sector: SectorDefinition = SAN_FRANCISCO_SECTOR,
+    config: GOESConfig | None = None,
+) -> Dict[str, str]:
+    """Download specified ABI L1b channels for a scene and save to NetCDF.
+
+    Returns a mapping of channel -> saved file path.
+    """
+    cfg = config or GOESConfig()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    saved: Dict[str, str] = {}
+    for channel in channels:
+        ds = fetch_ABI_L1b(channel, scene_time, sector, cfg)
+        fname = (
+            f"goes18_{cfg.product}_{channel}_"
+            f"{scene_time:%Y%m%dT%H%M%S}_SF.nc"
+        )
+        path = output_dir / fname
+        ds.to_netcdf(path)
+        saved[channel] = str(path)
+    return saved
 
 
 __all__ = [
     "SectorDefinition",
     "SAN_FRANCISCO_SECTOR",
     "fetch_ABI_L1b",
-    "fetch_ABI_geolocation",
-    "fetch_ABI_cloud_mask",
-    "fetch_ABI_cloud_phase",
-    "fetch_ABI_LWP",
-    "fetch_surface_emissivity_maps",
-    "fetch_NWP_surface_temperature",
-    "fetch_clear_sky_transmittance_and_radiance",
+    "download_channels",
     "subset_sector",
     "abi_xy_to_lonlat",
 ]
