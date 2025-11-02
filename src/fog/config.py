@@ -41,18 +41,19 @@ class GOESConfig:
     max_concurrent: int = 4
     timeout: int = 300
     preload_minutes: int = 10
-    additional_products: Tuple[str, ...] = (
-        "ABI-L2-MCMIPC",  # cloud mask
-        "ABI-L2-CMIPF",  # cloud phase
-        "ABI-L2-LWPRad",  # LWP
-    )
+    additional_products: None = None
+    # additional_products: Tuple[str, ...] = (
+    #     "ABI-L2-MCMIPC",  # cloud mask
+    #     "ABI-L2-CMIPF",  # cloud phase
+    #     "ABI-L2-LWPRad",  # LWP
+    # )
 
     def channel_list(self) -> List[str]:
         return list(self.channels)
 
     def product_prefixes(self) -> Iterable[str]:
         yield self.product
-        yield from self.additional_products
+        # yield from self.additional_products
 
     def valid_time_window(self, scene_time: datetime) -> Tuple[datetime, datetime]:
         scene_time = scene_time.astimezone(timezone.utc)

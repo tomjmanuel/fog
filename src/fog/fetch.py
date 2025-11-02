@@ -145,7 +145,8 @@ def open_dataset(
     )
     open_kwargs = {"engine": "h5netcdf"}
     ds = xr.open_dataset(fs.open(uri, mode="rb"), **open_kwargs)
-    return ds.load()
+    # Keep dataset lazy - don't load until after subsetting
+    return ds
 
 
 def fetch_ABI_L1b(
@@ -161,6 +162,7 @@ def fetch_ABI_L1b(
         product=product,
         channel=channel,
     )
+    # Subset while lazy, then load only the subset
     subset = subset_sector(dataset, sector)
     return subset.load()
 
@@ -237,6 +239,7 @@ def download_channels(
     Returns a mapping of channel -> saved file path.
     """
     cfg = config or GOESConfig()
+
     channel_list = list(channels) if channels is not None else cfg.channel_list()
     output_dir.mkdir(parents=True, exist_ok=True)
     saved: Dict[str, str] = {}
