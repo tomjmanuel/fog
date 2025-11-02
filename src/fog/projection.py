@@ -86,39 +86,9 @@ def _extract_projection(dataset: xr.Dataset) -> GeostationaryProjection:
             ]
         )
 
-        # Semi-minor may be missing; derive from inverse_flattening/flattening
-        # when possible
-        semi_minor: float
-        try:
-            semi_minor = _get_first_float(
-                ["semi_minor_axis", "b"]
-            )  # type: ignore[no-redef]
-        except KeyError:
-            inv_flat: float | None = None
-            flat: float | None = None
-            # Try common keys for inverse flattening or flattening
-            for key in (
-                "inverse_flattening",
-                "rf",
-                "1/f",
-                "inverse_flattening_ratio",
-            ):
-                if key in attrs and attrs[key] not in (None, 0, "0"):
-                    inv_flat = float(attrs[key])
-                    break
-            if inv_flat and inv_flat != 0.0:
-                semi_minor = semi_major * (1.0 - 1.0 / inv_flat)
-            else:
-                for key in ("flattening", "f"):
-                    if key in attrs and attrs[key] is not None:
-                        flat = float(attrs[key])
-                        break
-                if flat is not None:
-                    semi_minor = semi_major * (1.0 - flat)
-                else:
-                    # Fall back to WGS-84 flattening if nothing provided
-                    wgs84_f = 1.0 / 298.257223563
-                    semi_minor = semi_major * (1.0 - wgs84_f)
+        semi_minor = _get_first_float(
+            ["semi_minor_axis", "b"]
+        )
 
         sweep = _get_first_str(["sweep_angle_axis"], default="x")
         if sweep not in ("x", "y"):
