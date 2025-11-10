@@ -117,6 +117,7 @@ def visualize_directory(
             base_image,
             aspect="equal",
             extent=extent_for_imshow,
+            cmap="gray",
         )
 
         ax_r[0].imshow(
