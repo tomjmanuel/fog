@@ -119,12 +119,14 @@ ax.set_title('GOES Fixed-Grid Geometry (Robust Ray–Ellipsoid Intersection)')
 ax.view_init(elev=20, azim=-60)
 
 max_range = np.array([X.max()-X.min(), Y.max()-Y.min(), Z.max()-Z.min()]).max()/1e6
+
 mid_x = (X.max()+X.min())/2/1e6
 mid_y = (Y.max()+Y.min())/2/1e6
 mid_z = (Z.max()+Z.min())/2/1e6
 ax.set_xlim(mid_x - max_range/2, mid_x + max_range/2)
 ax.set_ylim(mid_y - max_range/2, mid_y + max_range/2)
-ax.set_zlim(mid_z - max_range/2, mid_z + max_range/2)
+ax.set_zlim(mid_z - max_range/2, 1.2*H_center/1e6)
+ax.set_box_aspect([1, 1, 1.2 * (H_center / 1e6 / max_range)])
 
 plt.tight_layout()
 plt.show()
