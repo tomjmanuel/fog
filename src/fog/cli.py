@@ -1,19 +1,12 @@
-"""Command line interface for downloading GOES-18 ABI channels."""
+"""Command line interface for downloading GOES-18 ABI CO2."""
 from __future__ import annotations
-
 import argparse
 from datetime import datetime
 from pathlib import Path
 from typing import Iterable
-
 from rich.console import Console
-
 from .config import default_config
-from .fetch import (
-    SAN_FRANCISCO_SECTOR,
-    SectorDefinition,
-    download_channels,
-)
+from .fetch import download_channels
 
 console = Console()
 
@@ -28,25 +21,6 @@ def _parse_time(value: str) -> datetime:
         ) from exc
 
 
-def _parse_sector(value: str) -> SectorDefinition:
-    """
-    Parse a comma-separated bounding box into a
-    :class:`SectorDefinition`.
-    """
-    parts = value.split(",")
-    if len(parts) != 4:
-        msg = "sector must be 'west,south,east,north'"
-        raise argparse.ArgumentTypeError(msg)
-
-    try:
-        west, south, east, north = (float(v) for v in parts)
-    except ValueError as exc:  # pragma: no cover - argparse handles messaging
-        msg = "sector bounds must be numeric"
-        raise argparse.ArgumentTypeError(msg) from exc
-
-    return SectorDefinition(west=west, south=south, east=east, north=north)
-
-
 def build_parser() -> argparse.ArgumentParser:
     """Create the CLI argument parser."""
     parser = argparse.ArgumentParser(
@@ -58,12 +32,6 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
         type=_parse_time,
         help="ISO-8601 time of the desired scan (UTC)",
-    )
-    parser.add_argument(
-        "--sector",
-        type=_parse_sector,
-        default=SAN_FRANCISCO_SECTOR,
-        help="Bounding box expressed as west,south,east,north",
     )
     parser.add_argument(
         "--output-dir",
@@ -84,7 +52,6 @@ def main(argv: Iterable[str] | None = None) -> None:
     saved = download_channels(
         args.scene_time,
         args.output_dir,
-        sector=args.sector,
         config=cfg,
     )
     for ch, path in sorted(saved.items()):

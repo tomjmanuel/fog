@@ -2,10 +2,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import json
-from pathlib import Path
 from datetime import datetime, timedelta, timezone
-from typing import Iterable, List, Mapping, Tuple
+from typing import Iterable, List, Tuple
 
 
 @dataclass(slots=True, frozen=True)
@@ -42,11 +40,6 @@ class GOESConfig:
     timeout: int = 300
     preload_minutes: int = 10
     additional_products: None = None
-    # additional_products: Tuple[str, ...] = (
-    #     "ABI-L2-MCMIPC",  # cloud mask
-    #     "ABI-L2-CMIPF",  # cloud phase
-    #     "ABI-L2-LWPRad",  # LWP
-    # )
 
     def channel_list(self) -> List[str]:
         return list(self.channels)
@@ -77,36 +70,4 @@ def default_config() -> GOESConfig:
     return GOESConfig()
 
 
-@dataclass(slots=True, frozen=True)
-class OverlayConfig:
-    """Configuration for overlaying high resolution base imagery."""
-
-    bounding_box: tuple[float, float, float, float]
-
-    @classmethod
-    def from_mapping(cls, mapping: Mapping[str, float] | Mapping[str, object]) -> "OverlayConfig":
-        try:
-            lon_min = float(mapping["lon_min"])
-            lon_max = float(mapping["lon_max"])
-            lat_min = float(mapping["lat_min"])
-            lat_max = float(mapping["lat_max"])
-        except Exception as exc:  # pragma: no cover - validation path
-            raise ValueError(
-                "OverlayConfig mapping must contain lon_min, lon_max, lat_min, lat_max"
-            ) from exc
-        if lon_min >= lon_max or lat_min >= lat_max:
-            raise ValueError("Bounding box must have lon_min < lon_max and lat_min < lat_max")
-        return cls((lon_min, lon_max, lat_min, lat_max))
-
-
-def load_overlay_config(path: Path) -> OverlayConfig:
-    """Load overlay configuration from a JSON file."""
-
-    data = json.loads(Path(path).read_text())
-    bbox = data.get("bounding_box")
-    if not isinstance(bbox, dict):
-        raise ValueError("Overlay config must define a 'bounding_box' object")
-    return OverlayConfig.from_mapping(bbox)
-
-
-__all__ = ["GOESConfig", "OverlayConfig", "default_config", "load_overlay_config"]
+__all__ = ["GOESConfig", "default_config"]

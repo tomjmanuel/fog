@@ -22,14 +22,15 @@ from .projection import project_xy_to_lonlat
 logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger(__name__)
 
+
 @dataclass(slots=True)
 class SectorDefinition:
     """Geographic bounds for a processing sector."""
 
-    west: float
+    north: float
     south: float
     east: float
-    north: float
+    west: float
 
     def as_tuple(self) -> Tuple[float, float, float, float]:
         return (self.west, self.south, self.east, self.north)
@@ -44,20 +45,11 @@ class SectorDefinition:
 
 
 SAN_FRANCISCO_SECTOR = SectorDefinition(
-    west=-123.0,
-    south=36.5,
-    east=-121.0,
-    north=38.2,
+    north=38.390362,
+    south=37.268569,
+    east=-121.731963,
+    west=-122.984661,
 )
-
-
-@lru_cache(maxsize=1)
-def _fs(config: GOESConfig):
-    if s3fs is None:  # pragma: no cover - we warn at runtime
-        raise RuntimeError(
-            "s3fs is required to fetch data but is not installed."
-        )
-    return s3fs.S3FileSystem(anon=True, client_kwargs={"endpoint_url": None})
 
 
 def list_scene_objects(
@@ -69,7 +61,7 @@ def list_scene_objects(
 ) -> list[str]:
     start, end = config.valid_time_window(scene_time)
     prefix = config.object_key_prefix(scene_time, product=product)
-    fs = _fs(config)
+    fs = s3fs.S3FileSystem(anon=True, client_kwargs={"endpoint_url": None})
     candidates = fs.glob(f"{config.bucket}/{prefix}*")
     filtered = []
     for key in candidates:
@@ -94,7 +86,6 @@ def open_dataset(
     scene_time: datetime,
     product: str,
     *,
-    chunks: Mapping[str, int] | None = None,
     channel: str | None = None,
 ) -> xr.Dataset:
     keys = list_scene_objects(config, scene_time, product, channel=channel)
@@ -102,7 +93,7 @@ def open_dataset(
         raise FileNotFoundError(
             f"No {product} objects found for {scene_time.isoformat()}"
         )
-    fs = _fs(config)
+    fs = s3fs.S3FileSystem(anon=True, client_kwargs={"endpoint_url": None})
     # Select the single granule whose timestamp is closest to scene_time
     # to avoid stacking multiple scans.
     scene_time_utc = (
@@ -172,26 +163,25 @@ def subset_sector(dataset: xr.Dataset, sector: SectorDefinition) -> xr.Dataset:
     y = dataset.coords.get("y")
     if x is None or y is None:
         raise ValueError("Dataset missing GOES projection coordinates")
-    lon2d, lat2d = abi_xy_to_lonlat(x.values, y.values, dataset=dataset)
-    try:
-        lon_min = float(np.nanmin(lon2d))
-        lon_max = float(np.nanmax(lon2d))
-        lat_min = float(np.nanmin(lat2d))
-        lat_max = float(np.nanmax(lat2d))
-        LOGGER.info(
-            "Scene lon/lat bounds: lon[%.2f, %.2f], lat[%.2f, %.2f]; "
-            "sector west=%.2f east=%.2f south=%.2f north=%.2f",
-            lon_min,
-            lon_max,
-            lat_min,
-            lat_max,
-            sector.west,
-            sector.east,
-            sector.south,
-            sector.north,
-        )
-    except Exception:
-        pass
+    lon2d, lat2d = project_xy_to_lonlat(x, y, dataset=dataset)
+
+    lon_min = float(np.nanmin(lon2d))
+    lon_max = float(np.nanmax(lon2d))
+    lat_min = float(np.nanmin(lat2d))
+    lat_max = float(np.nanmax(lat2d))
+    LOGGER.info(
+        "Scene lon/lat bounds: lon[%.2f, %.2f], lat[%.2f, %.2f]; "
+        "sector west=%.2f east=%.2f south=%.2f north=%.2f",
+        lon_min,
+        lon_max,
+        lat_min,
+        lat_max,
+        sector.west,
+        sector.east,
+        sector.south,
+        sector.north,
+    )
+
     ds = dataset.assign_coords(
         {
             "lon": (("y", "x"), lon2d),
@@ -215,32 +205,18 @@ def subset_sector(dataset: xr.Dataset, sector: SectorDefinition) -> xr.Dataset:
     return ds
 
 
-def abi_xy_to_lonlat(
-    x: np.ndarray,
-    y: np.ndarray,
-    *,
-    dataset: xr.Dataset,
-) -> Tuple[np.ndarray, np.ndarray]:
-    """Convert GOES ``x``/``y`` scan angles to lon/lat using dataset metadata."""
-
-    return project_xy_to_lonlat(x, y, dataset=dataset)
-
-
 def download_channels(
     scene_time: datetime,
     output_dir: Path,
     *,
-    channels: Iterable[str] | None = None,
-    sector: SectorDefinition = SAN_FRANCISCO_SECTOR,
     config: GOESConfig | None = None,
 ) -> Dict[str, str]:
     """Download specified ABI L1b channels for a scene and save to NetCDF.
-
     Returns a mapping of channel -> saved file path.
     """
     cfg = config or GOESConfig()
-
-    channel_list = list(channels) if channels is not None else cfg.channel_list()
+    channel_list = ["C02"]
+    sector = SAN_FRANCISCO_SECTOR
     output_dir.mkdir(parents=True, exist_ok=True)
     saved: Dict[str, str] = {}
     for channel in channel_list:
@@ -272,5 +248,4 @@ __all__ = [
     "fetch_ABI_L1b",
     "download_channels",
     "subset_sector",
-    "abi_xy_to_lonlat",
 ]
