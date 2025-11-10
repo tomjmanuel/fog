@@ -3,13 +3,12 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from typing import Iterable, Sequence
-import json
+from typing import Iterable
 import numpy as np
 import xarray as xr
 import matplotlib.pyplot as plt
 from scipy.interpolate import griddata
-from .fetch import SectorDefinition
+from .fetch import SectorDefinition, SAN_FRANCISCO_SECTOR
 
 
 def _arg_parser() -> argparse.ArgumentParser:
@@ -31,22 +30,7 @@ def _arg_parser() -> argparse.ArgumentParser:
         type=Path,
         help="Optional high-resolution base image for overlay",
     )
-    parser.add_argument(
-        "--overlay-config",
-        type=Path,
-        help="JSON configuration describing the base image bounding box",
-    )
     return parser
-
-
-def load_overlay_config(path: Path) -> SectorDefinition:
-    """Load overlay configuration from a JSON file."""
-
-    data = json.loads(Path(path).read_text())
-    bbox = data.get("bounding_box")
-
-    config_sector = SectorDefinition(north=bbox["north"], south=bbox["south"], east=bbox["east"], west=bbox["west"])
-    return config_sector
 
 
 def _alpha_from_values(values: np.ndarray) -> np.ndarray:
@@ -144,13 +128,10 @@ def main(argv: Iterable[str] | None = None) -> None:
     parser = _arg_parser()
     args = parser.parse_args(argv)
 
-    # overlay config has the bounding box for now (lat lon)
-    base_image_sector = load_overlay_config(args.overlay_config)
-
     visualize_directory(
         args.input_dir,
         base_image_path=args.base_image,
-        base_image_sector=base_image_sector,
+        base_image_sector=SAN_FRANCISCO_SECTOR,
     )
 
 
