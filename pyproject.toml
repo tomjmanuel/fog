@@ -16,11 +16,11 @@ dependencies = [
     "numpy>=1.24",
     "rich>=13.0",
     "matplotlib>=3.8",
-    "pyproj>=3.6"
+    "pyproj>=3.6",
+    "scipy>=1.11"
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=7.4"
 ]
-

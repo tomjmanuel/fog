@@ -36,6 +36,25 @@ python -m fog.visualize \
   --base-image /path/to/high_res_base.png
 ```
 
+### Daily render pipeline
+
+Generate both low- and high-resolution composites for the current day and save
+them to `./renders`:
+
+```bash
+python -m fog.render_daily \
+  --data-dir ./data \
+  --render-dir ./renders \
+  --base-image-low San_Francisco_Bay.jpg \
+  --base-image-high San_Francisco_Bay_full_size.jpg
+```
+
+The command downloads the requested GOES scene (defaults to “now”), renders two
+PNGs that reuse the dual-panel layout from `fog.visualize`, and stores them
+under `renders/YYYY-MM-DD/`. Helper functions for uploading the resulting files
+to S3/CloudFront live in `fog.s3_uploader` (they are implemented but not yet
+invoked by the CLI).
+
 ## Project Structure
 
 ```
