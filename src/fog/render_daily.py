@@ -36,6 +36,8 @@ class RenderPreset:
 def _default_scene_time() -> datetime:
     now = datetime.now(timezone.utc)
     rounded_minute = (now.minute // 10) * 10
+    breakpoint()
+
     return now.replace(
         minute=rounded_minute,
         second=0,
@@ -56,23 +58,16 @@ def _parse_scene_time(value: str) -> datetime:
 
 
 def build_presets(
-    low_base: Path,
-    high_base: Path,
+    base_image_path: Path,
 ) -> list[RenderPreset]:
+    """Leaving this in case we want to add more presets later."""
     return [
         RenderPreset(
-            name="low_res",
-            base_image=low_base,
-            display_name="Low Resolution",
-            dpi=150,
-        ),
-        RenderPreset(
-            name="high_res",
-            base_image=high_base,
-            display_name="High Resolution",
-            dpi=220,
-            figsize=(14, 7),
-        ),
+            name="standard_render",
+            base_image=base_image_path,
+            display_name="Standard Render",
+            dpi=400,
+        )
     ]
 
 
@@ -162,16 +157,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Directory for rendered PNG files.",
     )
     parser.add_argument(
-        "--base-image-low",
+        "--base-image",
         type=Path,
         default=_default_base("San_Francisco_Bay.jpg"),
         help="Low-resolution base image for overlays.",
-    )
-    parser.add_argument(
-        "--base-image-high",
-        type=Path,
-        default=_default_base("San_Francisco_Bay_full_size.jpg"),
-        help="High-resolution base image for overlays.",
     )
     return parser
 
@@ -184,8 +173,7 @@ def main(argv: Iterable[str] | None = None) -> None:
     console.log(f"Rendering GOES scene for {scene_time.isoformat()}...")
 
     presets = build_presets(
-        args.base_image_low,
-        args.base_image_high,
+        args.base_image,
     )
     paths = render_scene_for_presets(
         scene_time,

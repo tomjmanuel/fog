@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 GOES Fixed-Grid Geometry Visualizer (3D) — Ray/Intersection FIXED
 
@@ -36,6 +35,7 @@ H_center = ABI_PROJECTION["perspective_point_height"] + r_eq  # satellite distan
 x_scan = np.deg2rad(1.2)
 y_scan = np.deg2rad(4.0)
 
+
 # ------------------- Ray/Ellipsoid Intersection -------------------
 def ray_intersect_ellipsoid_from_sat(x: float, y: float):
     """
@@ -70,6 +70,7 @@ def ray_intersect_ellipsoid_from_sat(x: float, y: float):
     sy = Sy + t * uy
     sz = Sz + t * uz
     return sx, sy, sz
+
 
 def surface_point_to_lonlat(sx, sy, sz):
     lon0 = np.deg2rad(LON0_DEG)

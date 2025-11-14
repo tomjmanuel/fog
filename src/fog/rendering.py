@@ -121,7 +121,7 @@ def render_scene_to_file(
     *,
     sector: SectorDefinition,
     title: str | None = None,
-    dpi: int = 200,
+    dpi: int = 400,
     figsize: Tuple[int, int] = (12, 6),
 ) -> Path:
     """Render ``dataset`` radiance over ``base_image`` and save to disk."""

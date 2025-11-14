@@ -45,8 +45,7 @@ them to `./renders`:
 python -m fog.render_daily \
   --data-dir ./data \
   --render-dir ./renders \
-  --base-image-low San_Francisco_Bay.jpg \
-  --base-image-high San_Francisco_Bay_full_size.jpg
+  --base-image San_Francisco_Bay.jpg \
 ```
 
 The command downloads the requested GOES scene (defaults to “now”), renders two
@@ -54,6 +53,18 @@ PNGs that reuse the dual-panel layout from `fog.visualize`, and stores them
 under `renders/YYYY-MM-DD/`. Helper functions for uploading the resulting files
 to S3/CloudFront live in `fog.s3_uploader` (they are implemented but not yet
 invoked by the CLI).
+
+### Batch daylight rendering
+
+To iterate across every daylight scene (sunrise → sunset) in San Francisco for
+today, run the helper script (it simply reuses the renderer above in a loop):
+
+```bash
+python render_all_of_today.py --interval-minutes 10
+```
+
+Override the date or base images with the corresponding CLI flags if you want to
+re-run a prior day or experiment with different overlays.
 
 ## Project Structure
 
@@ -63,4 +74,6 @@ src/fog/
   config.py        # GOES configuration
   fetch.py         # Data access + subsetting + download function
   cli.py           # CLI entry point
+  render_daily.py  # CLI utility to render composites for the current day
+
 ```
