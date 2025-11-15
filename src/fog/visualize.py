@@ -8,7 +8,7 @@ import xarray as xr
 import matplotlib.pyplot as plt
 from .fetch import SectorDefinition, SAN_FRANCISCO_SECTOR
 from .rendering import (
-    create_overlay_and_raw_figures,
+    create_overlay_and_raw_images,
     resample_radiance_to_base_image,
 )
 
@@ -33,6 +33,7 @@ def _arg_parser() -> argparse.ArgumentParser:
         help="Optional high-resolution base image for overlay",
     )
     return parser
+
 
 def visualize_directory(
     input_dir: Path,
@@ -61,14 +62,14 @@ def visualize_directory(
             radiance, base_image, base_image_sector
         )
         scene_title = path.name.replace(".nc", "")
-        create_overlay_and_raw_figures(
+        overlay_image, raw_image = create_overlay_and_raw_images(
             base_image,
             radiance_resampled,
-            base_image_sector,
-            title=scene_title,
+
         )
 
-    plt.show()
+        overlay_image.save(f"{scene_title}_overlay.png")
+        raw_image.save(f"{scene_title}_raw.png")
 
 
 def main(argv: Iterable[str] | None = None) -> None:
