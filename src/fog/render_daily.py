@@ -110,15 +110,12 @@ def render_scene_for_presets(
         base_image = plt.imread(base_image_path)
         output_name = f"{timestamp_str}_{preset.name}.png"
         output_path = date_folder / output_name
-        title = f"{preset.title} · {scene_time:%Y-%m-%d %H:%MZ}"
         render_scene_to_file(
             dataset,
             base_image,
             output_path,
             sector=sector,
-            title=title,
             dpi=preset.dpi,
-            figsize=preset.figsize,
         )
         results[preset.name] = output_path
     return results

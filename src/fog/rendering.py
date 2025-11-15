@@ -7,17 +7,16 @@ from typing import Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 import xarray as xr
-from matplotlib.figure import Figure
-from matplotlib.axes import Axes
 from scipy.interpolate import griddata
+from PIL import Image
 
 from .fetch import SectorDefinition
 
 
 def _alpha_from_values(values: np.ndarray) -> np.ndarray:
     """Generate alpha values for radiance data using a lookup table."""
-    table_values = np.array([0.0, 25.0, 50.0, 75.0, 100.0, 200.0])
-    table_alpha = np.array([0.2, 0.60, 0.80, 0.85, 0.90, 1.0])
+    table_values = np.array([0.0, 10.0, 20.0, 40.0])
+    table_alpha = np.array([0.1, 0.5, 1.0, 1.0])
     clean = np.nan_to_num(values, nan=0.0).astype(float, copy=False)
     clipped = np.clip(clean, table_values[0], table_values[-1])
     return np.interp(clipped, table_values, table_alpha)
@@ -70,48 +69,26 @@ def sector_extent(sector: SectorDefinition) -> Tuple[float, float, float, float]
     )
 
 
-def create_overlay_figure(
+def create_overlay_and_raw_images(
     base_image: np.ndarray,
     radiance_resampled: np.ndarray,
-    sector: SectorDefinition,
-    *,
-    figsize: Tuple[int, int] = (12, 6),
-    title: str | None = None,
-) -> tuple[Figure, tuple[Axes, Axes]]:
-    """Create the two-panel overlay figure used across the project."""
-    extent = sector_extent(sector)
-    alpha_mask = _alpha_from_values(radiance_resampled)
+) -> tuple[Image.Image, Image.Image]:
+    """Create two PIL images: overlay and raw radiance, using numpy alpha blending."""
 
-    fig, axes = plt.subplots(1, 2, figsize=figsize)
-    axes[0].imshow(
-        base_image,
-        aspect="equal",
-        extent=extent,
-        cmap="gray",
-    )
-    axes[0].imshow(
-        radiance_resampled,
-        aspect="equal",
-        cmap="gray",
-        alpha=alpha_mask,
-        extent=extent,
-    )
-    axes[0].set_title("Overlay")
+    # Calculate alpha mask (0-1)
+    alpha = _alpha_from_values(radiance_resampled)
 
-    axes[1].imshow(
-        radiance_resampled,
-        aspect="equal",
-        cmap="gray",
-        extent=extent,
-    )
-    axes[1].set_title("Radiance")
+    # Direct numpy overlay (radiance on base using alpha mask)
+    radiance_resampled[np.isnan(radiance_resampled)] = 0
 
-    if title:
-        fig.suptitle(title)
-        fig.tight_layout(rect=[0, 0, 1, 0.95])
-    else:
-        fig.tight_layout()
-    return fig, (axes[0], axes[1])
+    # normalize radiance to 0-255
+    radiance_normalized = (radiance_resampled - radiance_resampled.min()) / (radiance_resampled.max() - radiance_resampled.min()) * 255
+    overlay_im_data = (base_image * (1 - alpha) + radiance_normalized * alpha).clip(0, 255).astype(np.uint8)
+
+    # Convert to PIL Images
+    overlay_pil = Image.fromarray(overlay_im_data, mode="L")
+    raw_pil = Image.fromarray(radiance_normalized.astype(np.uint8), mode="L")
+    return overlay_pil, raw_pil
 
 
 def render_scene_to_file(
@@ -120,31 +97,32 @@ def render_scene_to_file(
     output_path: Path,
     *,
     sector: SectorDefinition,
-    title: str | None = None,
     dpi: int = 400,
-    figsize: Tuple[int, int] = (12, 6),
 ) -> Path:
     """Render ``dataset`` radiance over ``base_image`` and save to disk."""
     radiance = dataset["Rad"]
     resampled = resample_radiance_to_base_image(
         radiance, base_image, sector
     )
-    fig, _ = create_overlay_figure(
+    overlay_image, raw_image = create_overlay_and_raw_images(
         base_image,
         resampled,
-        sector,
-        figsize=figsize,
-        title=title,
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(output_path, dpi=dpi)
-    plt.close(fig)
+
+    fname_raw = output_path.with_name(
+        output_path.stem + "_radiance.png"
+    )
+
+    overlay_image.save(output_path)
+    raw_image.save(fname_raw)
+
     return output_path
 
 
 __all__ = [
     "resample_radiance_to_base_image",
     "sector_extent",
-    "create_overlay_figure",
+    "create_overlay_and_raw_images",
     "render_scene_to_file",
 ]

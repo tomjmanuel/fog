@@ -8,7 +8,7 @@ import xarray as xr
 import matplotlib.pyplot as plt
 from .fetch import SectorDefinition, SAN_FRANCISCO_SECTOR
 from .rendering import (
-    create_overlay_figure,
+    create_overlay_and_raw_figures,
     resample_radiance_to_base_image,
 )
 
@@ -61,7 +61,7 @@ def visualize_directory(
             radiance, base_image, base_image_sector
         )
         scene_title = path.name.replace(".nc", "")
-        create_overlay_figure(
+        create_overlay_and_raw_figures(
             base_image,
             radiance_resampled,
             base_image_sector,
