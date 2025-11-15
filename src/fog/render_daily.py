@@ -156,7 +156,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--base-image",
         type=Path,
-        default=_default_base("San_Francisco_Bay.jpg"),
+        default=_default_base("resources/San_Francisco_Bay.jpg"),
         help="Low-resolution base image for overlays.",
     )
     return parser
