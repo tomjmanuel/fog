@@ -46,9 +46,9 @@ class SectorDefinition:
 
 SAN_FRANCISCO_SECTOR = SectorDefinition(
     north=38.390362,
-    south=37.268569,
+    south=37.10,  # 37.268569
     east=-121.731963,
-    west=-122.984661,
+    west=-123.015,
 )
 
 
