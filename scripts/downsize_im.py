@@ -11,10 +11,10 @@ def downsize_image(input_filename: str, output_filename: str, downsize_factor: f
         # Downsize the image
         downsized_img = img.resize((new_width, new_height))
 
-        # Convert image to black and white
-        bw_img = downsized_img.convert("L")
-        # Replace downsized image with the black and white version
-        downsized_img = bw_img
+        # # Convert image to black and white
+        # bw_img = downsized_img.convert("L")
+        # # Replace downsized image with the black and white version
+        # downsized_img = bw_img
 
         # Save the downsized image
         downsized_img.save(output_filename)
@@ -24,4 +24,4 @@ def downsize_image(input_filename: str, output_filename: str, downsize_factor: f
 
 
 if __name__ == "__main__":
-    downsize_image("San_Francisco_Bay.jpg", "San_Francisco_Bay_downsized.jpg", 2.0)
+    downsize_image("resources/San_Francisco_Bay_full_size_color.jpg", "resources/San_Francisco_Bay.jpg", 2.0)

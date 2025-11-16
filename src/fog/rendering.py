@@ -12,14 +12,9 @@ from PIL import Image
 
 from .fetch import SectorDefinition
 
-
-def _alpha_from_values(values: np.ndarray) -> np.ndarray:
-    """Generate alpha values for radiance data using a lookup table."""
-    table_values = np.array([0.0, 10.0, 20.0, 40.0])
-    table_alpha = np.array([0.1, 0.5, 1.0, 1.0])
-    clean = np.nan_to_num(values, nan=0.0).astype(float, copy=False)
-    clipped = np.clip(clean, table_values[0], table_values[-1])
-    return np.interp(clipped, table_values, table_alpha)
+RADIANCE_LOWER_CLIP = 10
+RADIANCE_UPPER_CLIP = 120
+BASE_IMAGE_ALPHA = 0.3
 
 
 def resample_radiance_to_base_image(
@@ -69,12 +64,14 @@ def sector_extent(sector: SectorDefinition) -> Tuple[float, float, float, float]
     )
 
 
-def create_overlay_and_raw_images(
+def create_radiance_with_coastline(
     base_image: np.ndarray,
     radiance_resampled: np.ndarray,
     coastline_image: np.ndarray,
-) -> tuple[Image.Image, Image.Image]:
-    """Create two PIL images: overlay and raw radiance, using numpy alpha blending."""
+) -> Image.Image:
+    """
+    Create a PIL RGB image of the radiance, with the coastline mask added to the blue channel.
+    """
 
     if base_image.shape[:2] != coastline_image.shape[:2]:
         raise ValueError(
@@ -85,27 +82,30 @@ def create_overlay_and_raw_images(
             "Radiance image must match the base image resolution."
         )
 
-    # Calculate alpha mask (0-1)
-    alpha = _alpha_from_values(radiance_resampled)
+    # Prepare radiance as grayscale for R and G channels
+    radiance_resampled = np.nan_to_num(radiance_resampled, nan=0)
+    radiance_rescaled = radiance_resampled - RADIANCE_LOWER_CLIP
+    radiance_rescaled *= 255 / (RADIANCE_UPPER_CLIP - RADIANCE_LOWER_CLIP)
+    radiance_clipped = np.clip(radiance_rescaled, 0, 255).astype(np.uint8)
 
-    # Direct numpy overlay (radiance on base using alpha mask)
-    radiance_resampled[np.isnan(radiance_resampled)] = 0
-
-    # normalize radiance to 0-255
-    radiance_normalized = (radiance_resampled - radiance_resampled.min()) / (radiance_resampled.max() - radiance_resampled.min()) * 255
-    overlay_im_data = (base_image * (1 - alpha) + radiance_normalized * alpha).clip(0, 255)
-
+    # Coastline mask in blue channel: max out blue (255) where coastline is present
+    # coastline_mask: True where coastline_image == 0 (~land). False otherwise.
     coastline_mask = (coastline_image == 0)[:, :, 0]
 
-    overlay_im_data = np.where(coastline_mask, 255, overlay_im_data).astype(np.uint8)
-    radiance_with_coastline = np.where(
-        coastline_mask, 255, radiance_normalized
-    ).astype(np.uint8)
+    red_channel = radiance_clipped * (1 - BASE_IMAGE_ALPHA) + base_image[:, :, 0] * BASE_IMAGE_ALPHA
+    green_channel = radiance_clipped * (1 - BASE_IMAGE_ALPHA) + base_image[:, :, 1] * BASE_IMAGE_ALPHA + coastline_mask * 255
+    blue_channel = radiance_clipped * (1 - BASE_IMAGE_ALPHA) + base_image[:, :, 2] * BASE_IMAGE_ALPHA + coastline_mask * 255
 
-    # Convert to PIL Images
-    overlay_pil = Image.fromarray(overlay_im_data, mode="L")
-    raw_pil = Image.fromarray(radiance_with_coastline, mode="L")
-    return overlay_pil, raw_pil
+    rgb = np.stack(
+        [
+            np.clip(red_channel, 0, 255),
+            np.clip(green_channel, 0, 255),
+            np.clip(blue_channel, 0, 255),
+        ],
+        axis=-1
+    )
+
+    return Image.fromarray(rgb.astype(np.uint8), mode="RGB")
 
 
 def render_scene_to_file(
@@ -122,7 +122,7 @@ def render_scene_to_file(
     resampled = resample_radiance_to_base_image(
         radiance, base_image, sector
     )
-    overlay_image, raw_image = create_overlay_and_raw_images(
+    radiance_with_coastline = create_radiance_with_coastline(
         base_image,
         resampled,
         coastline_image,
@@ -133,15 +133,13 @@ def render_scene_to_file(
         output_path.stem + "_radiance.png"
     )
 
-    overlay_image.save(output_path)
-    raw_image.save(fname_raw)
-
+    radiance_with_coastline.save(fname_raw)
     return output_path
 
 
 __all__ = [
     "resample_radiance_to_base_image",
     "sector_extent",
-    "create_overlay_and_raw_images",
+    "create_radiance_with_coastline",
     "render_scene_to_file",
 ]
