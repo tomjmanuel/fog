@@ -91,7 +91,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--interval-minutes",
         type=int,
-        default=120,
+        default=20,
         help="Spacing in minutes between successive renders.",
     )
     parser.add_argument(

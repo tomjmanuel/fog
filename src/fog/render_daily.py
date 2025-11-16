@@ -144,8 +144,7 @@ def _default_base(path_name: str) -> Path:
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Download the current day's GOES scene and render low/high "
-            "resolution composites."
+            "Download the current day's GOES scene and render an overlay image."
         ),
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
@@ -171,13 +170,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--base-image",
         type=Path,
         default=_default_base("resources/San_Francisco_Bay.jpg"),
-        help="Low-resolution base image for overlays.",
+        help="Base image for overlays.",
     )
     parser.add_argument(
         "--coastline-image",
         type=Path,
         default=_default_base("resources/San_Francisco_Bay_Edges.jpg"),
-        help="Binary coastline mask aligned with the base image.",
+        help="Binary coastline mask to overlay on the base image.",
     )
     return parser
 
