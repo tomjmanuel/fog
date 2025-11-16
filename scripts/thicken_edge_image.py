@@ -3,7 +3,6 @@ import numpy as np
 import PIL.Image as Image
 
 
-
 input_image = Image.open("resources/San_Francisco_Bay_Edges_Thin.jpg")
 input_image_array = np.array(input_image)[:, :, 0]
 edge_image = input_image_array == 0

@@ -83,9 +83,10 @@ def create_radiance_with_coastline(
         )
 
     # Prepare radiance as grayscale for R and G channels
+    radiance_upper_clip_this_image = max(RADIANCE_UPPER_CLIP, np.max(radiance_resampled))
     radiance_resampled = np.nan_to_num(radiance_resampled, nan=0)
     radiance_rescaled = radiance_resampled - RADIANCE_LOWER_CLIP
-    radiance_rescaled *= 255 / (RADIANCE_UPPER_CLIP - RADIANCE_LOWER_CLIP)
+    radiance_rescaled *= 255 / (radiance_upper_clip_this_image - RADIANCE_LOWER_CLIP)
     radiance_clipped = np.clip(radiance_rescaled, 0, 255).astype(np.uint8)
 
     # Coastline mask in blue channel: max out blue (255) where coastline is present
