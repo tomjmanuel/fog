@@ -12,9 +12,9 @@ from PIL import Image
 
 from .fetch import SectorDefinition
 
-RADIANCE_LOWER_CLIP = 10
-RADIANCE_UPPER_CLIP = 120
-BASE_IMAGE_ALPHA = 0.3
+RADIANCE_LOWER_CLIP = 6
+RADIANCE_UPPER_CLIP = 140
+BASE_IMAGE_ALPHA = 0.37
 
 
 def resample_radiance_to_base_image(
