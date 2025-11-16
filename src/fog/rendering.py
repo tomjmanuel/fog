@@ -72,8 +72,18 @@ def sector_extent(sector: SectorDefinition) -> Tuple[float, float, float, float]
 def create_overlay_and_raw_images(
     base_image: np.ndarray,
     radiance_resampled: np.ndarray,
+    coastline_image: np.ndarray,
 ) -> tuple[Image.Image, Image.Image]:
     """Create two PIL images: overlay and raw radiance, using numpy alpha blending."""
+
+    if base_image.shape[:2] != coastline_image.shape[:2]:
+        raise ValueError(
+            "Coastline image must have the same height/width as the base image."
+        )
+    if radiance_resampled.shape[:2] != base_image.shape[:2]:
+        raise ValueError(
+            "Radiance image must match the base image resolution."
+        )
 
     # Calculate alpha mask (0-1)
     alpha = _alpha_from_values(radiance_resampled)
@@ -83,17 +93,25 @@ def create_overlay_and_raw_images(
 
     # normalize radiance to 0-255
     radiance_normalized = (radiance_resampled - radiance_resampled.min()) / (radiance_resampled.max() - radiance_resampled.min()) * 255
-    overlay_im_data = (base_image * (1 - alpha) + radiance_normalized * alpha).clip(0, 255).astype(np.uint8)
+    overlay_im_data = (base_image * (1 - alpha) + radiance_normalized * alpha).clip(0, 255)
+
+    coastline_mask = (coastline_image == 0)[:, :, 0]
+
+    overlay_im_data = np.where(coastline_mask, 255, overlay_im_data).astype(np.uint8)
+    radiance_with_coastline = np.where(
+        coastline_mask, 255, radiance_normalized
+    ).astype(np.uint8)
 
     # Convert to PIL Images
     overlay_pil = Image.fromarray(overlay_im_data, mode="L")
-    raw_pil = Image.fromarray(radiance_normalized.astype(np.uint8), mode="L")
+    raw_pil = Image.fromarray(radiance_with_coastline, mode="L")
     return overlay_pil, raw_pil
 
 
 def render_scene_to_file(
     dataset: xr.Dataset,
     base_image: np.ndarray,
+    coastline_image: np.ndarray,
     output_path: Path,
     *,
     sector: SectorDefinition,
@@ -107,6 +125,7 @@ def render_scene_to_file(
     overlay_image, raw_image = create_overlay_and_raw_images(
         base_image,
         resampled,
+        coastline_image,
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
 

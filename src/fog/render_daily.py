@@ -24,7 +24,8 @@ class RenderPreset:
 
     name: str
     base_image: Path
-    dpi: int = 200
+    coastline_image: Path
+    dpi: int = 400
     figsize: tuple[int, int] = (12, 6)
     display_name: str | None = None
 
@@ -59,12 +60,14 @@ def _parse_scene_time(value: str) -> datetime:
 
 def build_presets(
     base_image_path: Path,
+    coastline_image_path: Path,
 ) -> list[RenderPreset]:
     """Leaving this in case we want to add more presets later."""
     return [
         RenderPreset(
             name="standard_render",
             base_image=base_image_path,
+            coastline_image=coastline_image_path,
             display_name="Standard Render",
             dpi=400,
         )
@@ -79,10 +82,18 @@ def _load_dataset(path: Path) -> xr.Dataset:
         ds.close()
 
 
-def _ensure_base_image(path: Path) -> Path:
+def _ensure_path(path: Path, label: str) -> Path:
     if not path.exists():
-        raise FileNotFoundError(f"Base image not found: {path}")
+        raise FileNotFoundError(f"{label} not found: {path}")
     return path
+
+
+def _ensure_base_image(path: Path) -> Path:
+    return _ensure_path(path, "Base image")
+
+
+def _ensure_coastline_image(path: Path) -> Path:
+    return _ensure_path(path, "Coastline image")
 
 
 def render_scene_for_presets(
@@ -107,12 +118,15 @@ def render_scene_for_presets(
     results: dict[str, Path] = {}
     for preset in presets:
         base_image_path = _ensure_base_image(preset.base_image)
+        coastline_image_path = _ensure_coastline_image(preset.coastline_image)
         base_image = plt.imread(base_image_path)
+        coastline_image = plt.imread(coastline_image_path)
         output_name = f"{timestamp_str}_{preset.name}.png"
         output_path = date_folder / output_name
         render_scene_to_file(
             dataset,
             base_image,
+            coastline_image,
             output_path,
             sector=sector,
             dpi=preset.dpi,
@@ -159,6 +173,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=_default_base("resources/San_Francisco_Bay.jpg"),
         help="Low-resolution base image for overlays.",
     )
+    parser.add_argument(
+        "--coastline-image",
+        type=Path,
+        default=_default_base("resources/San_Francisco_Bay_Edges.jpg"),
+        help="Binary coastline mask aligned with the base image.",
+    )
     return parser
 
 
@@ -171,6 +191,7 @@ def main(argv: Iterable[str] | None = None) -> None:
 
     presets = build_presets(
         args.base_image,
+        args.coastline_image,
     )
     paths = render_scene_for_presets(
         scene_time,

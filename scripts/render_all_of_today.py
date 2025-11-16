@@ -112,6 +112,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=_default_base("resources/San_Francisco_Bay.jpg"),
         help="Base image for overlays.",
     )
+    parser.add_argument(
+        "--coastline-image",
+        type=Path,
+        default=_default_base("resources/San_Francisco_Bay_Edges.jpg"),
+        help="Binary coastline mask to overlay on renders.",
+    )
     return parser
 
 
@@ -140,6 +146,7 @@ def main(argv: Iterable[str] | None = None) -> None:
 
     presets = build_presets(
         args.base_image,
+        args.coastline_image,
     )
 
     successes = 0

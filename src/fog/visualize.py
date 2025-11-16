@@ -13,6 +13,10 @@ from .rendering import (
 )
 
 
+def _default_resource(path_name: str) -> Path:
+    return Path(__file__).resolve().parents[2] / path_name
+
+
 def _arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
@@ -30,7 +34,14 @@ def _arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--base-image",
         type=Path,
-        help="Optional high-resolution base image for overlay",
+        default=_default_resource("resources/San_Francisco_Bay.jpg"),
+        help="High-resolution base image for overlay",
+    )
+    parser.add_argument(
+        "--coastline-image",
+        type=Path,
+        default=_default_resource("resources/San_Francisco_Bay_Edges.jpg"),
+        help="Binary coastline mask aligned with the base image",
     )
     return parser
 
@@ -39,6 +50,7 @@ def visualize_directory(
     input_dir: Path,
     base_image_path: Path,
     base_image_sector: SectorDefinition,
+    coastline_image_path: Path,
 ) -> None:
     plt.style.use("dark_background")
 
@@ -49,6 +61,7 @@ def visualize_directory(
         )
 
     base_image = plt.imread(base_image_path)
+    coastline_image = plt.imread(coastline_image_path)
 
     for path in files:
         # Always load fully to avoid lazy/dask surprises
@@ -65,6 +78,7 @@ def visualize_directory(
         overlay_image, raw_image = create_overlay_and_raw_images(
             base_image,
             radiance_resampled,
+            coastline_image,
 
         )
 
@@ -80,6 +94,7 @@ def main(argv: Iterable[str] | None = None) -> None:
         args.input_dir,
         base_image_path=args.base_image,
         base_image_sector=SAN_FRANCISCO_SECTOR,
+        coastline_image_path=args.coastline_image,
     )
 
 
