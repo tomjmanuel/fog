@@ -12,7 +12,7 @@ from astral import LocationInfo
 from astral.sun import sun
 from rich.console import Console
 
-from fog.render_daily import (
+from fog.render_now import (
     _default_base,
     build_presets,
     render_scene_for_presets,

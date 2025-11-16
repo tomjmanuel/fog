@@ -1,4 +1,4 @@
-"""CLI utility to render low/high-resolution composites for the current day."""
+"""CLI utility to render low/high-resolution composites for the current time."""
 from __future__ import annotations
 
 import argparse
