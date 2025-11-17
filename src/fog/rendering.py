@@ -130,11 +130,7 @@ def render_scene_to_file(
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    fname_raw = output_path.with_name(
-        output_path.stem + "_radiance.png"
-    )
-
-    radiance_with_coastline.save(fname_raw)
+    radiance_with_coastline.save(output_path)
     return output_path
 
 
