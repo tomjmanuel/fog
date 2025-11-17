@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable, Mapping
+from time import sleep
 
 import matplotlib.pyplot as plt
 import xarray as xr
@@ -14,6 +15,7 @@ from rich.console import Console
 from .config import default_config
 from .fetch import SAN_FRANCISCO_SECTOR, SectorDefinition, download_channels
 from .rendering import render_scene_to_file
+from .s3_uploader import upload_render_batch
 
 console = Console()
 
@@ -37,8 +39,6 @@ class RenderPreset:
 def _default_scene_time() -> datetime:
     now = datetime.now(timezone.utc)
     rounded_minute = (now.minute // 10) * 10
-    breakpoint()
-
     return now.replace(
         minute=rounded_minute,
         second=0,
@@ -178,13 +178,27 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=_default_base("resources/San_Francisco_Bay_Edges.jpg"),
         help="Binary coastline mask to overlay on the base image.",
     )
+    parser.add_argument(
+        "--s3-bucket",
+        type=str,
+        default=None,
+        help="Name of the bucket where renders should be uploaded.",
+    )
+    parser.add_argument(
+        "--s3-prefix",
+        type=str,
+        default="",
+        help="Optional key prefix (defaults to the render date).",
+    )
+    parser.add_argument(
+        "--loop",
+        action="store_true",
+        help="Continuously render and upload every ten minutes.",
+    )
     return parser
 
 
-def main(argv: Iterable[str] | None = None) -> None:
-    parser = build_arg_parser()
-    args = parser.parse_args(argv)
-
+def _render_once(args: argparse.Namespace) -> None:
     scene_time = args.scene_time or _default_scene_time()
     console.log(f"Rendering GOES scene for {scene_time.isoformat()}...")
 
@@ -198,10 +212,33 @@ def main(argv: Iterable[str] | None = None) -> None:
         data_dir=args.data_dir,
         render_dir=args.render_dir,
     )
-
     for name, path in paths.items():
         console.log(f"{name}: {path}")
-    console.log("Render complete. Upload helpers are defined in fog.s3_uploader.")
+
+    if args.s3_bucket:
+        prefix = args.s3_prefix or scene_time.strftime("%Y-%m-%d")
+        console.log(f"Uploading renders to s3://{args.s3_bucket}/{prefix}...")
+        uris = upload_render_batch(
+            paths,
+            args.s3_bucket,
+            prefix=prefix,
+        )
+        for uri in uris:
+            console.log(f"Uploaded {uri}")
+    console.log("Render complete.")
+
+
+def main(argv: Iterable[str] | None = None) -> None:
+    parser = build_arg_parser()
+    args = parser.parse_args(argv)
+
+    while True:
+        _render_once(args)
+        if not args.loop:
+            break
+        args.scene_time = None
+        console.log("Waiting ten minutes for the next render...")
+        sleep(600)
 
 
 if __name__ == "__main__":
