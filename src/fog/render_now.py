@@ -3,10 +3,13 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Iterable, Mapping
+from typing import Iterable, Mapping, Tuple
 from time import sleep
+
+from astral import LocationInfo
+from astral.sun import sun
 
 import matplotlib.pyplot as plt
 import xarray as xr
@@ -17,7 +20,17 @@ from .fetch import SAN_FRANCISCO_SECTOR, SectorDefinition, download_channels
 from .rendering import render_scene_to_file
 from .s3_uploader import upload_render_batch
 
+LOOP_INTERVAL_MINUTES = 10
+
 console = Console()
+
+SF_LOCATION = LocationInfo(
+    name="San Francisco",
+    region="USA",
+    timezone="America/Los_Angeles",
+    latitude=37.7749,
+    longitude=-122.4194,
+)
 
 
 @dataclass(frozen=True)
@@ -141,6 +154,63 @@ def _default_base(path_name: str) -> Path:
     return repo_root / path_name
 
 
+def _sun_window(target_date: date) -> Tuple[datetime, datetime]:
+    """Return sunrise/sunset timestamps in UTC for the location/date."""
+    s = sun(
+        SF_LOCATION.observer,
+        date=target_date,
+        tzinfo=timezone.utc,
+    )
+
+    # sunset will cross a day boundary, so adjust the day by one day (approximately correct)
+    sunrise = s["sunrise"] + timedelta(minutes=30)
+    sunset = s["sunset"] + timedelta(days=1)
+    return sunrise, sunset
+
+
+def is_daylight(scene_time: datetime) -> bool:
+    # get the sunrise and sunset times for the scene time
+    sunrise, sunset = _sun_window(scene_time.date())
+    return sunrise < scene_time < sunset
+
+
+def _render_once(args: argparse.Namespace) -> None:
+    scene_time = args.scene_time or _default_scene_time()
+
+    # check if the scene time is within daylight
+    # if not, return
+    if not is_daylight(scene_time):
+        console.log(f"Scene time {scene_time.isoformat()} is not within daylight.")
+        return
+
+    console.log(f"Rendering GOES scene for {scene_time.isoformat()}...")
+
+    presets = build_presets(
+        args.base_image,
+        args.coastline_image,
+    )
+    paths = render_scene_for_presets(
+        scene_time,
+        presets=presets,
+        data_dir=args.data_dir,
+        render_dir=args.render_dir,
+    )
+    for name, path in paths.items():
+        console.log(f"{name}: {path}")
+
+    if args.s3_bucket:
+        prefix = args.s3_prefix or scene_time.strftime("%Y-%m-%d")
+        console.log(f"Uploading renders to s3://{args.s3_bucket}/{prefix}...")
+        uris = upload_render_batch(
+            paths,
+            args.s3_bucket,
+            prefix=prefix,
+        )
+        for uri in uris:
+            console.log(f"Uploaded {uri}")
+    console.log("Render complete.")
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
@@ -198,36 +268,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _render_once(args: argparse.Namespace) -> None:
-    scene_time = args.scene_time or _default_scene_time()
-    console.log(f"Rendering GOES scene for {scene_time.isoformat()}...")
-
-    presets = build_presets(
-        args.base_image,
-        args.coastline_image,
-    )
-    paths = render_scene_for_presets(
-        scene_time,
-        presets=presets,
-        data_dir=args.data_dir,
-        render_dir=args.render_dir,
-    )
-    for name, path in paths.items():
-        console.log(f"{name}: {path}")
-
-    if args.s3_bucket:
-        prefix = args.s3_prefix or scene_time.strftime("%Y-%m-%d")
-        console.log(f"Uploading renders to s3://{args.s3_bucket}/{prefix}...")
-        uris = upload_render_batch(
-            paths,
-            args.s3_bucket,
-            prefix=prefix,
-        )
-        for uri in uris:
-            console.log(f"Uploaded {uri}")
-    console.log("Render complete.")
-
-
 def main(argv: Iterable[str] | None = None) -> None:
     parser = build_arg_parser()
     args = parser.parse_args(argv)
@@ -238,7 +278,7 @@ def main(argv: Iterable[str] | None = None) -> None:
             break
         args.scene_time = None
         console.log("Waiting ten minutes for the next render...")
-        sleep(600)
+        sleep(LOOP_INTERVAL_MINUTES * 60)
 
 
 if __name__ == "__main__":

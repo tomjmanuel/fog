@@ -3,27 +3,18 @@
 from __future__ import annotations
 
 import argparse
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Iterable, List, Tuple
+from typing import Iterable, List
 from zoneinfo import ZoneInfo
-
-from astral import LocationInfo
-from astral.sun import sun
 from rich.console import Console
 
 from fog.render_now import (
     _default_base,
     build_presets,
     render_scene_for_presets,
-)
-
-SF_LOCATION = LocationInfo(
-    name="San Francisco",
-    region="USA",
-    timezone="America/Los_Angeles",
-    latitude=37.7749,
-    longitude=-122.4194,
+    _sun_window,
+    SF_LOCATION,
 )
 
 console = Console()
@@ -41,20 +32,6 @@ def _parse_date(value: str) -> date:
         raise argparse.ArgumentTypeError(
             "Date must be formatted as YYYY-MM-DD."
         ) from exc
-
-
-def _sun_window(target_date: date) -> Tuple[datetime, datetime]:
-    """Return sunrise/sunset timestamps in UTC for the location/date."""
-    s = sun(
-        SF_LOCATION.observer,
-        date=target_date,
-        tzinfo=timezone.utc,
-    )
-
-    # sunset will cross a day boundary, so adjust the day by one day (approximately correct)
-    sunrise = s["sunrise"] + timedelta(minutes=30)
-    sunset = s["sunset"] + timedelta(days=1)
-    return sunrise, sunset
 
 
 def _generate_scene_times(
