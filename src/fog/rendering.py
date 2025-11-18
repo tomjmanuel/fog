@@ -91,7 +91,7 @@ def create_radiance_with_coastline(
 
     # Coastline mask in blue channel: max out blue (255) where coastline is present
     # coastline_mask: True where coastline_image == 0 (~land). False otherwise.
-    coastline_mask = (coastline_image < 1)[:, :, 0]
+    coastline_mask = (coastline_image < 10)[:, :, 0]
 
     red_channel = radiance_clipped * (1 - BASE_IMAGE_ALPHA) + base_image[:, :, 0] * BASE_IMAGE_ALPHA
     green_channel = radiance_clipped * (1 - BASE_IMAGE_ALPHA) + base_image[:, :, 1] * BASE_IMAGE_ALPHA + coastline_mask * 255
