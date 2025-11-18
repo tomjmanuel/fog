@@ -140,16 +140,6 @@
       opacity: 0.5;
       margin-bottom: 0.75rem;
     }
-
-    .loading,
-    .error {
-      font-size: 0.9rem;
-      opacity: 0.8;
-    }
-
-    .error {
-      color: #ff7b7b;
-    }
   </style>
 </head>
 <body>
@@ -184,15 +174,23 @@
   </div>
 
   <script>
+    console.log("fog page script starting");
+
+    window.addEventListener("error", (e) => {
+      console.error("Global error:", e.message);
+    });
+
     // === CONFIG ===
     const BUCKET = "fog-app-renders";
-    const REGION = "us-west-1";       // your region
-    const PREFIX = "daily/";          // folder within the bucket
-    const INITIAL_FPS = 3;            // 3 Hz
+    const REGION = "us-west-1";
+    const PREFIX = "daily/";
+    const INITIAL_FPS = 3;
 
-    const LIST_URL = `https://${BUCKET}.s3.${REGION}.amazonaws.com/?list-type=2&prefix=${encodeURIComponent(PREFIX)}`;
+    // Hardcoded list URL for now
+    const LIST_URL =
+      "https://fog-app-renders.s3.us-west-1.amazonaws.com/?list-type=2&prefix=daily/";
 
-    let frames = [];          // { key, url, timestampUtc, label }
+    let frames = [];
     let currentIndex = 0;
     let timerId = null;
     let fps = INITIAL_FPS;
@@ -208,24 +206,25 @@
     const fpsValue = document.getElementById("fps-value");
 
     function parseTimestampFromKey(key) {
-    const filename = key.split("/").pop();
-    const match = filename.match(
+      const filename = key.split("/").pop();
+      const match = filename.match(
         /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z/
-    );
-    console.log("parseTimestampFromKey:", { key, filename, match });
-    if (!match) return null;
-    const [, year, month, day, hour, minute, second] = match;
-    const date = new Date(Date.UTC(
-        Number(year),
-        Number(month) - 1,
-        Number(day),
-        Number(hour),
-        Number(minute),
-        Number(second)
-    ));
-    return date;
-}
-
+      );
+      console.log("parseTimestampFromKey:", { key, filename, match });
+      if (!match) return null;
+      const [, year, month, day, hour, minute, second] = match;
+      const date = new Date(
+        Date.UTC(
+          Number(year),
+          Number(month) - 1,
+          Number(day),
+          Number(hour),
+          Number(minute),
+          Number(second)
+        )
+      );
+      return date;
+    }
 
     function formatTimestampForOverlay(date) {
       if (!date) return "Unknown time";
@@ -306,37 +305,43 @@
     }
 
     async function fetchFrames() {
+      console.log("fetchFrames() called");
       imageCountMetaEl.textContent = "Loading frames…";
       try {
         const resp = await fetch(LIST_URL);
-        if (!resp.ok) {
-          throw new Error(`S3 list failed: ${resp.status} ${resp.statusText}`);
-        }
+        console.log("List response status:", resp.status);
         const xmlText = await resp.text();
         const parser = new DOMParser();
         const xml = parser.parseFromString(xmlText, "application/xml");
 
         const contents = Array.from(xml.getElementsByTagName("Contents"));
-        const items = contents.map((node) => {
-        const key = node.getElementsByTagName("Key")[0].textContent;
-        return key;
-        }).filter(key => key && key.endsWith(".png"));
+        const items = contents
+          .map((node) => {
+            const key = node.getElementsByTagName("Key")[0].textContent;
+            return key;
+          })
+          .filter((key) => key && key.endsWith(".png"));
 
         console.log("Contents length:", contents.length);
         console.log("PNG items:", items);
 
-        const newFrames = items.map((key) => {
-        const ts = parseTimestampFromKey(key);
-        return {
-            key,
-            url: `https://${BUCKET}.s3.${REGION}.amazonaws.com/${key}`,
-            timestampUtc: ts,
-            label: ts ? formatTimestampForOverlay(ts) : key
-        };
-        }).filter(f => !!f.timestampUtc);
+        const newFrames = items
+          .map((key) => {
+            const ts = parseTimestampFromKey(key);
+            const segments = key.split("/").map(encodeURIComponent);
+            const url = `https://${BUCKET}.s3.${REGION}.amazonaws.com/${segments.join(
+              "/"
+            )}`;
+            return {
+              key,
+              url,
+              timestampUtc: ts,
+              label: ts ? formatTimestampForOverlay(ts) : key
+            };
+          })
+          .filter((f) => !!f.timestampUtc);
 
         console.log("Parsed frames:", newFrames);
-
 
         newFrames.sort((a, b) => a.timestampUtc - b.timestampUtc);
 
@@ -351,7 +356,7 @@
           }
         }
       } catch (err) {
-        console.error(err);
+        console.error("Error in fetchFrames:", err);
         imageCountMetaEl.textContent = "Error loading frames";
         lastRefreshMetaEl.textContent = err.message;
       }
@@ -377,6 +382,7 @@
     });
 
     (async function init() {
+      console.log("init() starting");
       fpsSlider.value = String(INITIAL_FPS);
       fpsValue.textContent = `${INITIAL_FPS} fps`;
       setStatusPlaying(false);
