@@ -87,7 +87,7 @@ def open_dataset(
     product: str,
     *,
     channel: str | None = None,
-) -> xr.Dataset:
+) -> Tuple[xr.Dataset, datetime]:
     keys = list_scene_objects(config, scene_time, product, channel=channel)
     if not keys:
         raise FileNotFoundError(
@@ -113,8 +113,10 @@ def open_dataset(
         except Exception:
             continue
     if not candidates:
-        # Fallback: use the first key
+        # Fallback: use the first key. Without timestamp metadata, assume the
+        # requested scene time.
         chosen_key = keys[0]
+        chosen_t = scene_time_utc
     else:
         chosen_t, chosen_key = min(
             candidates,
@@ -137,7 +139,7 @@ def open_dataset(
     open_kwargs = {"engine": "h5netcdf"}
     ds = xr.open_dataset(fs.open(uri, mode="rb"), **open_kwargs)
     # Keep dataset lazy - don't load until after subsetting
-    return ds
+    return ds, chosen_t
 
 
 def fetch_ABI_L1b(
@@ -145,9 +147,9 @@ def fetch_ABI_L1b(
     scene_time: datetime,
     sector: SectorDefinition,
     config: GOESConfig,
-) -> xr.Dataset:
+) -> Tuple[xr.Dataset, datetime]:
     product = config.product
-    dataset = open_dataset(
+    dataset, actual_scene_time = open_dataset(
         config,
         scene_time,
         product=product,
@@ -155,7 +157,7 @@ def fetch_ABI_L1b(
     )
     # Subset while lazy, then load only the subset
     subset = subset_sector(dataset, sector)
-    return subset.load()
+    return subset.load(), actual_scene_time
 
 
 def subset_sector(dataset: xr.Dataset, sector: SectorDefinition) -> xr.Dataset:
@@ -210,7 +212,7 @@ def download_channels(
     output_dir: Path,
     *,
     config: GOESConfig | None = None,
-) -> Dict[str, str]:
+) -> Tuple[Dict[str, str], datetime]:
     """Download specified ABI L1b channels for a scene and save to NetCDF.
     Returns a mapping of channel -> saved file path.
     """
@@ -219,11 +221,14 @@ def download_channels(
     sector = SAN_FRANCISCO_SECTOR
     output_dir.mkdir(parents=True, exist_ok=True)
     saved: Dict[str, str] = {}
+    actual_scene_time: datetime | None = None
     for channel in channel_list:
-        ds = fetch_ABI_L1b(channel, scene_time, sector, cfg)
+        ds, channel_scene_time = fetch_ABI_L1b(channel, scene_time, sector, cfg)
+        if actual_scene_time is None:
+            actual_scene_time = channel_scene_time
         fname = (
             f"goes18_{cfg.product}_{channel}_"
-            f"{scene_time:%Y%m%dT%H%M%S}_SF.nc"
+            f"{channel_scene_time:%Y%m%dT%H%M%S}_SF.nc"
         )
         path = output_dir / fname
         # Ensure coordinate variables are saved as float to avoid integer
@@ -239,7 +244,11 @@ def download_channels(
                     pass
         ds.to_netcdf(path, encoding=coord_float32)
         saved[channel] = str(path)
-    return saved
+
+    # Fallback to the requested time if we couldn't determine the actual
+    # timestamp for some reason (should not happen).
+    resolved_scene_time = actual_scene_time or scene_time
+    return saved, resolved_scene_time
 
 
 __all__ = [

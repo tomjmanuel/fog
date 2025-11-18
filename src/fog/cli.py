@@ -49,10 +49,13 @@ def main(argv: Iterable[str] | None = None) -> None:
 
     cfg = default_config()
     console.log("Downloading ABI channel C02 for SF sector...")
-    saved = download_channels(
+    saved, actual_scene_time = download_channels(
         args.scene_time,
         args.output_dir,
         config=cfg,
+    )
+    console.log(
+        f"Resolved scene time: {actual_scene_time.astimezone().isoformat()}"
     )
     for ch, path in sorted(saved.items()):
         console.log(f"Saved {ch}: {path}")
