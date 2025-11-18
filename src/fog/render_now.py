@@ -20,7 +20,7 @@ from .fetch import SAN_FRANCISCO_SECTOR, SectorDefinition, download_channels
 from .rendering import render_scene_to_file
 from .s3_uploader import upload_render_batch
 
-LOOP_INTERVAL_MINUTES = 10
+LOOP_INTERVAL_MINUTES = 8
 
 console = Console()
 
@@ -116,17 +116,17 @@ def render_scene_for_presets(
     data_dir: Path,
     render_dir: Path,
     sector: SectorDefinition = SAN_FRANCISCO_SECTOR,
-) -> Mapping[str, Path]:
+) -> Tuple[Mapping[str, Path], datetime]:
     cfg = default_config()
-    saved = download_channels(scene_time, data_dir, config=cfg)
+    saved, actual_scene_time = download_channels(scene_time, data_dir, config=cfg)
     channel_path = saved.get("C02")
     if channel_path is None:
         raise RuntimeError("C02 channel was not downloaded; cannot render.")
     dataset = _load_dataset(Path(channel_path))
 
-    date_folder = render_dir / scene_time.strftime("%Y-%m-%d")
+    date_folder = render_dir / actual_scene_time.strftime("%Y-%m-%d")
     date_folder.mkdir(parents=True, exist_ok=True)
-    timestamp_str = scene_time.strftime("%Y%m%dT%H%M%SZ")
+    timestamp_str = actual_scene_time.strftime("%Y%m%dT%H%M%SZ")
 
     results: dict[str, Path] = {}
     for preset in presets:
@@ -145,7 +145,7 @@ def render_scene_for_presets(
             dpi=preset.dpi,
         )
         results[preset.name] = output_path
-    return results
+    return results, actual_scene_time
 
 
 def _default_base(path_name: str) -> Path:
@@ -189,17 +189,22 @@ def _render_once(args: argparse.Namespace) -> None:
         args.base_image,
         args.coastline_image,
     )
-    paths = render_scene_for_presets(
+    paths, actual_scene_time = render_scene_for_presets(
         scene_time,
         presets=presets,
         data_dir=args.data_dir,
         render_dir=args.render_dir,
     )
+    if actual_scene_time != scene_time:
+        console.log(
+            "Resolved scene time differs from requested time: "
+            f"{actual_scene_time.isoformat()}"
+        )
     for name, path in paths.items():
         console.log(f"{name}: {path}")
 
     if args.s3_bucket:
-        prefix = args.s3_prefix or scene_time.strftime("%Y-%m-%d")
+        prefix = args.s3_prefix or actual_scene_time.strftime("%Y-%m-%d")
         console.log(f"Uploading renders to s3://{args.s3_bucket}/{prefix}...")
         uris = upload_render_batch(
             paths,
