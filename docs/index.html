@@ -317,19 +317,25 @@
 
         const contents = Array.from(xml.getElementsByTagName("Contents"));
         const items = contents.map((node) => {
-          const key = node.getElementsByTagName("Key")[0].textContent;
-          return key;
+        const key = node.getElementsByTagName("Key")[0].textContent;
+        return key;
         }).filter(key => key && key.endsWith(".png"));
 
+        console.log("Contents length:", contents.length);
+        console.log("PNG items:", items);
+
         const newFrames = items.map((key) => {
-          const ts = parseTimestampFromKey(key);
-          return {
+        const ts = parseTimestampFromKey(key);
+        return {
             key,
-            url: `https://${BUCKET}.s3.${REGION}.amazonaws.com/${encodeURIComponent(key)}`,
+            url: `https://${BUCKET}.s3.${REGION}.amazonaws.com/${key}`,
             timestampUtc: ts,
             label: ts ? formatTimestampForOverlay(ts) : key
-          };
+        };
         }).filter(f => !!f.timestampUtc);
+
+        console.log("Parsed frames:", newFrames);
+
 
         newFrames.sort((a, b) => a.timestampUtc - b.timestampUtc);
 
