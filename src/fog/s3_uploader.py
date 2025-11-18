@@ -8,15 +8,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Mapping
 
-
-def _lazy_boto3() -> Any:
-    try:
-        import boto3  # type: ignore
-    except ModuleNotFoundError as exc:  # pragma: no cover - optional dependency
-        raise RuntimeError(
-            "boto3 is required to upload renders to S3."
-        ) from exc
-    return boto3
+from .aws import lazy_boto3
 
 
 def build_s3_key(prefix: str, filename: str) -> str:
@@ -36,7 +28,7 @@ def upload_file_to_s3(
     extra_args: Mapping[str, Any] | None = None,
 ) -> str:
     """Upload ``local_path`` to ``s3://bucket/key`` and return the URI."""
-    boto3 = _lazy_boto3()
+    boto3 = lazy_boto3()
     s3 = client or boto3.client("s3")
     s3.upload_file(
         str(local_path),
