@@ -26,8 +26,9 @@
 
     .stage {
       position: relative;
-      width: min(calc(100vw - 2rem), calc(100vh - 3rem));
-      aspect-ratio: 1 / 1;
+      aspect-ratio: 1500 / 1970;
+      width: min(calc(100vw - 2rem), calc((100vh - 4rem) * 1500 / 1970));
+      max-height: calc(100vh - 4rem);
       background: radial-gradient(circle at top, #1c2333, #05060a 60%);
       border-radius: 16px;
       overflow: hidden;
@@ -44,21 +45,6 @@
       image-rendering: crisp-edges;
       image-rendering: pixelated;
       filter: drop-shadow(0 0 15px rgba(0, 0, 0, 0.8));
-    }
-
-    .timestamp-overlay {
-      position: absolute;
-      left: 0.8rem;
-      top: 0.8rem;
-      padding: 0.2rem 0.65rem;
-      border-radius: 999px;
-      background: rgba(0, 0, 0, 0.7);
-      font-size: 0.8rem;
-      letter-spacing: 0.03em;
-      text-transform: uppercase;
-      backdrop-filter: blur(6px);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      white-space: nowrap;
     }
 
     .frame-meta {
@@ -97,7 +83,6 @@
 <body>
   <div class="stage">
     <img id="frame-image" alt="Fog render sequence" />
-    <div class="timestamp-overlay" id="timestamp-overlay">—</div>
   </div>
 
   <div class="frame-meta" id="frame-count">Loading frames…</div>
@@ -130,7 +115,6 @@
     let lockedOnLatest = false;
 
     const imgEl = document.getElementById("frame-image");
-    const tsEl = document.getElementById("timestamp-overlay");
     const frameCountEl = document.getElementById("frame-count");
     const latestBtn = document.getElementById("latest-btn");
 
@@ -175,7 +159,9 @@
         frameCountEl.textContent = "No frames available";
         return;
       }
-      frameCountEl.textContent = `${frames.length} frames available`;
+      const currentFrame = frames[currentIndex];
+      const timestampLabel = currentFrame?.label ? ` — ${currentFrame.label}` : "";
+      frameCountEl.textContent = `${frames.length} frames available${timestampLabel}`;
     }
 
     async function showFrame(index) {
@@ -183,7 +169,7 @@
       const frame = frames[index];
       if (!frame) return;
       imgEl.src = frame.url;
-      tsEl.textContent = frame.label;
+      updateFrameCount();
       if (typeof imgEl.decode === "function") {
         try {
           await imgEl.decode();
