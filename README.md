@@ -1,7 +1,6 @@
 # Bay Area Clouds and Fog – GOES-18 Visuals for San Francisco
 
 ![Placeholder for looping site demo gif](resources/fog-loop.gif)
-*Looping composite from fog.watch (replace this placeholder once you add the gif — instructions below).*
 
 Bay Area Clouds and Fog continuously pulls GOES-18 ABI Channel 2 data for the Bay Area, reprojects it so you see the atmosphere straight above San Francisco, fuses it with a high-resolution basemap, and publishes the latest frames so the website can loop through recent conditions.
 
