@@ -4,6 +4,8 @@
 
 Bay Area Clouds and Fog continuously pulls GOES-18 ABI Channel 2 data for the Bay Area, reprojects it so you see the atmosphere straight above San Francisco, fuses it with a high-resolution basemap, and publishes the latest frames so the website can loop through recent conditions.
 
+[View the web page](docs/index.html)
+
 ## Highlights
 - End-to-end fog + cloud visualization sourced from NOAA's GOES-West satellite (full-disk → cropped SF sector).
 - Projection routines that orient the satellite view as if looking straight down from the city.
