@@ -1,13 +1,13 @@
-# Bay Area Clouds and Fog – GOES-18 Visuals for San Francisco
+# Bay Area Clouds and Fog – NASA GOES Visuals for San Francisco
 
 ![Placeholder for looping site demo gif](resources/fog-loop.gif)
 
 Bay Area Clouds and Fog continuously pulls GOES-18 ABI Channel 2 data for the Bay Area, reprojects it so you see the atmosphere straight above San Francisco, fuses it with a high-resolution basemap, and publishes the latest frames so the website can loop through recent conditions.
 
-[View the web page](docs/index.html)
+[View the web page](https://tomjmanuel.github.io/fog/)
 
 ## Highlights
-- End-to-end fog + cloud visualization sourced from NOAA's GOES-West satellite (full-disk → cropped SF sector).
+- End-to-end fog + cloud visualization sourced from NOAA's GOES-West satellite (full-disk → cropped and projected SF sector).
 - Projection routines that orient the satellite view as if looking straight down from the city.
 - Automated rendering and publishing pipeline that runs PST during dailight hours on an EC2 instance and pushes to S3-backed hosting.
 - Daily cleanup jobs keep both EC2 storage and S3 renders tidy.
