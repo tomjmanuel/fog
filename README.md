@@ -16,7 +16,7 @@ Bay Area Clouds and Fog continuously pulls GOES-18 ABI Channel 2 data for the Ba
 1. **Acquisition (GOES-West → NetCDF)**  
    `fog.fetch` downloads GOES-18 ABI L1b Channel 2 scans covering San Francisco, saving them as NetCDF for reproducibility.
 2. **Projection & Calibration**  
-   Projection functions in  `fog.projection.py` reprojects the geostationary grid so pixels align with a nadir view directly above SF.  
+   Projection functions in  `fog.projection.py` reprojects the geostationary grid so pixels align with a view directly above SF.  
    ![Placeholder for GOES-West full disk image](resources/goes_full_disk.png)  
    ![Placeholder for projection math figure](resources/goes_projection.png)
 3. **Rendering**  
