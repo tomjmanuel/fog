@@ -164,7 +164,7 @@ def _sun_window(target_date: date) -> Tuple[datetime, datetime]:
 
     # sunset will cross a day boundary, so adjust the day by one day (approximately correct)
     sunrise = s["sunrise"] + timedelta(minutes=30)
-    sunset = s["sunset"] + timedelta(days=1)
+    sunset = s["sunset"] + timedelta(days=1) + timedelta(minutes=30)
     return sunrise, sunset
 
 
