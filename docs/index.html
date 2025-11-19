@@ -47,6 +47,17 @@
       filter: drop-shadow(0 0 15px rgba(0, 0, 0, 0.8));
     }
 
+    .frame-layer {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      transition: opacity 0.35s ease;
+    }
+
+    .frame-layer.active {
+      opacity: 1;
+    }
+
     .frame-meta {
       width: min(calc(100vw - 2rem), 700px);
       font-size: 0.85rem;
@@ -78,17 +89,34 @@
     .controls button:hover {
       background: rgba(255, 255, 255, 0.08);
     }
+
+    .data-credit {
+      font-size: 0.75rem;
+      opacity: 0.6;
+    }
+
+    .data-credit a {
+      color: inherit;
+    }
   </style>
 </head>
 <body>
   <div class="stage">
-    <img id="frame-image" alt="Fog render sequence" />
+    <img class="frame-layer active" alt="Fog render sequence" />
+    <img class="frame-layer" alt="" aria-hidden="true" />
   </div>
 
   <div class="frame-meta" id="frame-count">Loading frames…</div>
 
   <div class="controls">
     <button id="latest-btn" type="button">Latest image</button>
+  </div>
+
+  <div class="data-credit">
+    Data provided by
+    <a href="https://weather.ndc.nasa.gov/goes/" target="_blank" rel="noreferrer">
+      NASA GOES-West
+    </a>
   </div>
 
   <script>
@@ -114,7 +142,8 @@
     let isPlaying = false;
     let lockedOnLatest = false;
 
-    const imgEl = document.getElementById("frame-image");
+    const imgLayers = Array.from(document.querySelectorAll(".frame-layer"));
+    let activeLayerIndex = 0;
     const frameCountEl = document.getElementById("frame-count");
     const latestBtn = document.getElementById("latest-btn");
 
@@ -164,23 +193,43 @@
       frameCountEl.textContent = `${frames.length} frames available${timestampLabel}`;
     }
 
+    function preloadImage(src) {
+      return new Promise((resolve) => {
+        const img = new Image();
+        const finalize = () => {
+          img.onload = null;
+          img.onerror = null;
+          resolve();
+        };
+        img.onload = finalize;
+        img.onerror = finalize;
+        img.src = src;
+        if (img.complete) {
+          finalize();
+        }
+      });
+    }
+
     async function showFrame(index) {
       if (!frames.length) return;
       const frame = frames[index];
       if (!frame) return;
-      imgEl.src = frame.url;
-      updateFrameCount();
-      if (typeof imgEl.decode === "function") {
+      const nextLayerIndex = 1 - activeLayerIndex;
+      const nextLayer = imgLayers[nextLayerIndex];
+      const src = frame.url;
+      if (nextLayer.dataset.src !== src) {
         try {
-          await imgEl.decode();
+          await preloadImage(src);
         } catch (err) {
-          console.warn("decode failed", err);
+          console.warn("preload failed", err);
         }
-      } else if (!imgEl.complete) {
-        await new Promise((resolve) => {
-          imgEl.onload = imgEl.onerror = () => resolve();
-        });
+        nextLayer.src = src;
+        nextLayer.dataset.src = src;
       }
+      imgLayers[activeLayerIndex].classList.remove("active");
+      nextLayer.classList.add("active");
+      activeLayerIndex = nextLayerIndex;
+      updateFrameCount();
     }
 
     function scheduleNextFrame() {
