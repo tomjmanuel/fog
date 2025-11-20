@@ -226,7 +226,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--scene-time",
         type=_parse_scene_time,
-        default=None,
+        default="2025-11-19T15:00:00",
         help="ISO-8601 time for the render (defaults to 'now').",
     )
     parser.add_argument(
