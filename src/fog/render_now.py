@@ -20,7 +20,7 @@ from .fetch import SAN_FRANCISCO_SECTOR, SectorDefinition, download_channels
 from .rendering import render_scene_to_file
 from .s3_uploader import upload_render_batch
 
-LOOP_INTERVAL_MINUTES = 8
+LOOP_INTERVAL_MINUTES = 2
 
 console = Console()
 
