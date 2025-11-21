@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import argparse
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable, List
 from zoneinfo import ZoneInfo
@@ -103,10 +103,12 @@ def main(argv: Iterable[str] | None = None) -> None:
     args = parser.parse_args(argv)
 
     target_date = args.date or _local_today()
+
+    # get the sunrise and sunset (in PST)
     sunrise, sunset = _sun_window(target_date)
     console.log(
         f"Rendering scenes from sunrise ({sunrise.isoformat()}) "
-        f"to sunset ({sunset.isoformat()}) UTC for {target_date}."
+        f"to sunset ({sunset.isoformat()}) PST for {target_date}."
     )
 
     if sunrise >= sunset:
@@ -114,9 +116,13 @@ def main(argv: Iterable[str] | None = None) -> None:
             "Sunrise occurs after sunset; check the selected date/location."
         )
 
+    # convert the sunrise and sunset to UTC
+    sunrise_utc = sunrise.astimezone(timezone.utc)
+    sunset_utc = sunset.astimezone(timezone.utc)
+
     scene_times = _generate_scene_times(
-        sunrise,
-        sunset,
+        sunrise_utc,
+        sunset_utc,
         interval_minutes=args.interval_minutes,
     )
     console.log(f"Found {len(scene_times)} scene windows.")

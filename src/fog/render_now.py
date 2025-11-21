@@ -7,6 +7,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable, Mapping, Tuple
 from time import sleep
+from zoneinfo import ZoneInfo
 
 from astral import LocationInfo
 from astral.sun import sun
@@ -31,6 +32,8 @@ SF_LOCATION = LocationInfo(
     latitude=37.7749,
     longitude=-122.4194,
 )
+
+SF_TIMEZONE = ZoneInfo(SF_LOCATION.timezone)
 
 
 @dataclass(frozen=True)
@@ -155,23 +158,24 @@ def _default_base(path_name: str) -> Path:
 
 
 def _sun_window(target_date: date) -> Tuple[datetime, datetime]:
-    """Return sunrise/sunset timestamps in UTC for the location/date."""
+    """Return sunrise/sunset timestamps in PST for the location/date."""
     s = sun(
         SF_LOCATION.observer,
         date=target_date,
-        tzinfo=timezone.utc,
+        tzinfo=SF_TIMEZONE,
     )
 
-    # sunset will cross a day boundary, so adjust the day by one day (approximately correct)
     sunrise = s["sunrise"]
-    sunset = s["sunset"] + timedelta(days=1) + timedelta(minutes=90)
+    sunset = s["sunset"]
     return sunrise, sunset
 
 
 def is_daylight(scene_time: datetime) -> bool:
+    local_scene_time = scene_time.astimezone(SF_TIMEZONE)
+
     # get the sunrise and sunset times for the scene time
-    sunrise, sunset = _sun_window(scene_time.date())
-    return sunrise < scene_time < sunset
+    sunrise, sunset = _sun_window(local_scene_time.date())
+    return sunrise < local_scene_time < sunset
 
 
 def _render_once(args: argparse.Namespace) -> None:
